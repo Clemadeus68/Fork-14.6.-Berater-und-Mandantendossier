@@ -1,5 +1,5 @@
 # Projektstatus: mandatsstart-unified-analyst
-*Zuletzt aktualisiert: 10.06.2026*
+*Zuletzt aktualisiert: 10.06.2026 (Commit 93940a4)*
 
 ---
 
@@ -113,9 +113,9 @@ frontend/
 ## Bekannte offene Punkte / mögliche nächste Aufgaben
 
 1. **Testen ob Two-Call-Output jetzt vollständig ist** — war der Stand beim letzten Test noch nicht abgeschlossen (letzter Commit `9587d86` hat max_tokens nochmals angepasst)
-2. **PDF-Qualität** — Druckdialog mit Hinweis auf Kopf-/Fußzeilen deaktivieren; könnte noch verbessert werden
-3. **Word-Export (.docx)** — noch nicht live getestet, nur Build-Test
-4. **Save/Load** — funktioniert, aber Briefing wird beim Laden noch nicht mitgespeichert (nur `report`, nicht `briefing`)
+2. **PDF-Qualität** — ✅ Hinweis auf Kopf-/Fußzeilen-Deaktivierung verbessert; TOC jetzt CSS-basiert aus Claude-Output
+3. **Word-Export (.docx)** — ✅ Header/Footer/Seitenzahlen eingebaut; **noch nicht live getestet**
+4. **Save/Load** — ✅ Briefing wird jetzt gespeichert (`save-result.js` fix, Commit `93940a4`)
 5. **Ladezeit** — Two-Call-Analyse dauert ~2-4 Minuten; kein Timeout-Problem, aber UI-Feedback könnte detaillierter sein
 
 ---
