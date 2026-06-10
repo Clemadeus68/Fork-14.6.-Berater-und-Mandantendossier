@@ -120,6 +120,8 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 
   /* Header */
   .doc-header { border-bottom: 4px solid #8CC63E; padding: 14px 0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+  .doc-header-left { display: flex; align-items: center; gap: 12px; }
+  .doc-header-left img { height: 40px; width: auto; }
   .doc-header-title { font-size: 15pt; font-weight: 700; color: #454544; }
   .doc-header-meta { font-size: 9pt; color: #777; text-align: right; line-height: 1.6; }
 
@@ -130,7 +132,7 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 
   /* Headings */
   h1 { font-size: 15pt; font-weight: 700; color: #454544; margin: 28px 0 8px; padding-bottom: 6px; border-bottom: 3px solid #8CC63E; }
-  h2 { font-size: 12pt; font-weight: 700; color: #454544; margin: 22px 0 7px; }
+  h2 { font-size: 12pt; font-weight: 700; color: #33AB97; margin: 22px 0 7px; }
   h3 { font-size: 11pt; font-weight: 700; color: #33AB97; margin: 14px 0 5px; }
 
   /* TOC section — styled box when Claude generates ## Inhaltsverzeichnis */
@@ -183,9 +185,12 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 <body>
 
 <div class="doc-header">
-  <div>
-    <div class="doc-header-title">${escHtml(docTitle)}</div>
-    <div style="font-size:10pt;color:#777;margin-top:3px;">${escHtml(companyName || url || '')}</div>
+  <div class="doc-header-left">
+    <img src="/logo.png" alt="be nice">
+    <div>
+      <div class="doc-header-title">${escHtml(docTitle)}</div>
+      <div style="font-size:10pt;color:#777;margin-top:3px;">${escHtml(companyName || url || '')}</div>
+    </div>
   </div>
   <div class="doc-header-meta">
     Clemens Gutmann | be nice Managementberatung<br>
@@ -295,11 +300,18 @@ export async function exportToWord({ report, url, companyName, title }) {
   const {
     Document, Packer, Paragraph, TextRun, BorderStyle, AlignmentType,
     Table, TableRow, TableCell, WidthType, ShadingType, TableLayoutType,
-    Header, Footer, PageNumber, InternalHyperlink, Bookmark,
+    Header, Footer, PageNumber, InternalHyperlink, Bookmark, ImageRun,
   } = await import('docx');
 
   const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const docTitle = title || 'Strategieanalyse';
+
+  // Logo aus Public-Ordner laden
+  let logoData = null;
+  try {
+    const resp = await fetch('/logo.png');
+    if (resp.ok) logoData = await resp.arrayBuffer();
+  } catch (_) {}
 
   const GREEN   = '8CC63E';
   const DARKGR  = '454544';
@@ -325,9 +337,9 @@ export async function exportToWord({ report, url, companyName, title }) {
   // ── Paragraph helpers ──────────────────────────────────────────────────────
   function h1Para(text) {
     return new Paragraph({
-      children: [new TextRun({ text: cleanHeadingText(text), bold: true, color: DARKGR, size: 32, font: 'Calibri' })],
+      children: [new TextRun({ text: cleanHeadingText(text), bold: true, color: DARKGR, size: 40, font: 'Calibri' })],
       spacing: { before: 320, after: 120 },
-      border: { bottom: { color: GREEN, space: 1, style: BorderStyle.SINGLE, size: 12 } },
+      border: { bottom: { color: GREEN, space: 1, style: BorderStyle.SINGLE, size: 40 } },
     });
   }
   function h2Para(text) {
@@ -375,13 +387,19 @@ export async function exportToWord({ report, url, companyName, title }) {
   // ── Header (every page) ────────────────────────────────────────────────────
   const docHeader = new Header({
     children: [
+      // Logo-Zeile
+      ...(logoData ? [new Paragraph({
+        children: [new ImageRun({ data: logoData, transformation: { width: 66, height: 36 }, type: 'png' })],
+        spacing: { before: 0, after: 40 },
+      })] : []),
+      // Titel + grüne Linie
       new Paragraph({
         children: [
-          new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 18, font: 'Calibri' }),
+          new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 20, font: 'Calibri' }),
           new TextRun({ text: companyName ? `  |  ${companyName}` : '', color: MIDGR, size: 18, font: 'Calibri' }),
         ],
         alignment: AlignmentType.LEFT,
-        border: { bottom: { color: GREEN, style: BorderStyle.SINGLE, size: 6, space: 4 } },
+        border: { bottom: { color: GREEN, style: BorderStyle.SINGLE, size: 8, space: 4 } },
         spacing: { after: 80 },
       }),
     ],
@@ -395,6 +413,8 @@ export async function exportToWord({ report, url, companyName, title }) {
           new TextRun({ text: 'Clemens Gutmann | be nice Managementberatung | www.nice-network.de', color: MIDGR, size: 16, font: 'Calibri' }),
           new TextRun({ text: '    Seite ', color: MIDGR, size: 16, font: 'Calibri' }),
           new TextRun({ children: [PageNumber.CURRENT], color: MIDGR, size: 16, font: 'Calibri' }),
+          new TextRun({ text: ' / ', color: MIDGR, size: 16, font: 'Calibri' }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], color: MIDGR, size: 16, font: 'Calibri' }),
         ],
         alignment: AlignmentType.LEFT,
         border: { top: { color: LIGHTGR, style: BorderStyle.SINGLE, size: 4, space: 4 } },
@@ -406,7 +426,7 @@ export async function exportToWord({ report, url, companyName, title }) {
   // ── Title block (first page) ───────────────────────────────────────────────
   const titleBlock = [
     new Paragraph({
-      children: [new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 40, font: 'Calibri' })],
+      children: [new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 48, font: 'Calibri' })],
       spacing: { before: 0, after: 80 },
       border: { bottom: { color: GREEN, style: BorderStyle.SINGLE, size: 16, space: 1 } },
     }),
