@@ -118,10 +118,6 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Calibri, 'Segoe UI', sans-serif; font-size: 11pt; color: #454544; background: white; padding: 2cm; }
 
-  /* Instruction — screen only */
-  .print-notice { background: #f0f8e8; border-left: 4px solid #8CC63E; padding: 10px 16px; margin-bottom: 20px; border-radius: 0 5px 5px 0; font-size: 10pt; }
-  @media print { .print-notice { display: none; } }
-
   /* Header */
   .doc-header { border-bottom: 4px solid #8CC63E; padding: 14px 0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
   .doc-header-title { font-size: 15pt; font-weight: 700; color: #454544; }
@@ -138,7 +134,7 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
   h3 { font-size: 11pt; font-weight: 700; color: #33AB97; margin: 14px 0 5px; }
 
   /* TOC section — styled box when Claude generates ## Inhaltsverzeichnis */
-  h2#inhaltsverzeichnis { display: none; }
+  h2#inhaltsverzeichnis { visibility: hidden; height: 0; margin: 0; padding: 0; overflow: hidden; line-height: 0; }
   h2#inhaltsverzeichnis + ul {
     background: #f5fbee;
     border-left: 4px solid #8CC63E;
@@ -186,10 +182,6 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 </head>
 <body>
 
-<div class="print-notice">
-  <strong>Hinweis:</strong> Im Browser-Druckdialog → „Weitere Einstellungen" → <strong>„Kopf- und Fußzeilen" deaktivieren</strong>, um „about:blank" aus dem Footer zu entfernen. Die Seitenzahlen bleiben über den Browser-Footer erhalten.
-</div>
-
 <div class="doc-header">
   <div>
     <div class="doc-header-title">${escHtml(docTitle)}</div>
@@ -233,13 +225,68 @@ export async function exportToPDF({ chartCardRef, report, url, companyName, titl
   const reportHtml = parseMarkdown(report || '');
   const html = buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title });
 
-  const win = window.open('', '_blank', 'width=900,height=700');
-  if (!win) { alert('Bitte Popup-Blocker deaktivieren für PDF-Export.'); return; }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 700);
+  // Render HTML in a hidden iframe so jsPDF can access the DOM
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;';
+  document.body.appendChild(frame);
+  frame.contentDocument.open();
+  frame.contentDocument.write(html);
+  frame.contentDocument.close();
+
+  // Remove body padding — jsPDF margin handles spacing
+  frame.contentDocument.body.style.padding = '0';
+
+  // Wait for fonts and images to render
+  await new Promise(r => setTimeout(r, 1000));
+
+  // Expand iframe to full content height so html2canvas captures everything
+  const fullH = frame.contentDocument.body.scrollHeight;
+  frame.style.height = (fullH + 50) + 'px';
+  await new Promise(r => setTimeout(r, 200));
+
+  const { jsPDF } = await import('jspdf');
+
+  const docTitle = title || 'Strategieanalyse';
+  const safeName = (companyName || url || 'dokument')
+    .replace(/https?:\/\/[^/]*\/?/, '')
+    .replace(/[^a-z0-9]/gi, '_')
+    .replace(/_+/g, '_')
+    .toLowerCase()
+    .slice(0, 35) || 'dokument';
+
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+
+  await new Promise((resolve) => {
+    pdf.html(frame.contentDocument.body, {
+      callback(doc) {
+        // Add "Seite X / Y" bottom right on every page
+        const pages = doc.internal.getNumberOfPages();
+        for (let p = 1; p <= pages; p++) {
+          doc.setPage(p);
+          doc.setFontSize(8);
+          doc.setTextColor(119, 119, 119);
+          const W = doc.internal.pageSize.getWidth();
+          const H = doc.internal.pageSize.getHeight();
+          doc.text(`${p} / ${pages}`, W - 15, H - 8, { align: 'right' });
+        }
+        doc.save(`${docTitle}_${safeName}.pdf`);
+        document.body.removeChild(frame);
+        resolve();
+      },
+      margin: [20, 15, 25, 15],  // top, left, bottom (25mm reserve für Seitenzahl), right
+      autoPaging: 'text',
+      x: 0,
+      y: 0,
+      width: 180,        // Inhalt-Breite in mm (210 − 15 − 15)
+      windowWidth: 794,  // Breite des iframe in px
+      html2canvas: {
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      },
+    });
+  });
 }
 
 // ── Word Export (.docx) ────────────────────────────────────────────────────────
@@ -248,7 +295,7 @@ export async function exportToWord({ report, url, companyName, title }) {
   const {
     Document, Packer, Paragraph, TextRun, BorderStyle, AlignmentType,
     Table, TableRow, TableCell, WidthType, ShadingType, TableLayoutType,
-    Header, Footer, PageNumber,
+    Header, Footer, PageNumber, InternalHyperlink, Bookmark,
   } = await import('docx');
 
   const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -284,14 +331,16 @@ export async function exportToWord({ report, url, companyName, title }) {
     });
   }
   function h2Para(text) {
+    const cleanText = cleanHeadingText(text);
     return new Paragraph({
-      children: [new TextRun({ text: cleanHeadingText(text), bold: true, color: TEAL, size: 24, font: 'Calibri' })],
+      children: [new Bookmark({ id: 'bm_' + slugId(cleanText), children: [new TextRun({ text: cleanText, bold: true, color: TEAL, size: 24, font: 'Calibri' })] })],
       spacing: { before: 240, after: 80 },
     });
   }
   function h3Para(text) {
+    const cleanText = cleanHeadingText(text);
     return new Paragraph({
-      children: [new TextRun({ text: cleanHeadingText(text), bold: true, color: TEAL, size: 22, font: 'Calibri' })],
+      children: [new Bookmark({ id: 'bm_' + slugId(cleanText), children: [new TextRun({ text: cleanText, bold: true, color: TEAL, size: 22, font: 'Calibri' })] })],
       spacing: { before: 180, after: 60 },
     });
   }
@@ -375,18 +424,50 @@ export async function exportToWord({ report, url, companyName, title }) {
   const lines = (report || '').split('\n');
   const body = [];
   let i = 0;
+  let inToc = false;
 
   while (i < lines.length) {
     const line = lines[i];
 
-    if (/^# /.test(line)) { body.push(h1Para(line.slice(2).trim())); i++; continue; }
-    if (/^## /.test(line)) { body.push(h2Para(line.slice(3).trim())); i++; continue; }
+    if (/^# /.test(line)) { inToc = false; body.push(h1Para(line.slice(2).trim())); i++; continue; }
+
+    // Detect TOC heading — render as styled label, set inToc flag
+    if (/^## Inhaltsverzeichnis\s*$/i.test(line.trim())) {
+      inToc = true;
+      body.push(new Paragraph({
+        children: [new TextRun({ text: 'Inhaltsverzeichnis', bold: true, color: GREEN, size: 18, font: 'Calibri', allCaps: true })],
+        spacing: { before: 200, after: 80 },
+        border: { left: { color: GREEN, style: BorderStyle.SINGLE, size: 12, space: 8 } },
+      }));
+      i++; continue;
+    }
+    if (/^## /.test(line)) { inToc = false; body.push(h2Para(line.slice(3).trim())); i++; continue; }
     if (/^### /.test(line)) { body.push(h3Para(line.slice(4).trim())); i++; continue; }
     if (/^---+$/.test(line.trim())) { body.push(hrPara()); i++; continue; }
 
     if (/^[-*] /.test(line)) {
       while (i < lines.length && /^[-*] /.test(lines[i])) {
-        body.push(bulletPara(lines[i].slice(2).trim())); i++;
+        const rawItem = lines[i].slice(2).trim();
+        if (inToc) {
+          // TOC item: [1. Titel](#anchor) → numbered plain text with InternalHyperlink
+          const lm = rawItem.match(/^\[(.+?)\]\(#.+?\)$/);
+          if (lm) {
+            const linkText = lm[1];
+            body.push(new Paragraph({
+              children: [new InternalHyperlink({
+                anchor: 'bm_' + slugId(cleanHeadingText(linkText)),
+                children: [new TextRun({ text: linkText, color: TEAL, size: 20, font: 'Calibri', underline: {} })],
+              })],
+              spacing: { before: 60, after: 60 },
+              indent: { left: 360 },
+            }));
+          } else {
+            body.push(bulletPara(rawItem));
+          }
+        } else {
+          body.push(bulletPara(rawItem));
+        }
+        i++;
       }
       continue;
     }
@@ -406,6 +487,7 @@ export async function exportToWord({ report, url, companyName, title }) {
 
       if (parsed.length > 0) {
         const colCount = Math.max(...parsed.map(r => r.length));
+        const colWidthDXA = Math.floor(9000 / colCount);
         const docRows = parsed.map((cells, ri) =>
           new TableRow({
             children: Array.from({ length: colCount }, (_, ci) => {
@@ -417,6 +499,7 @@ export async function exportToWord({ report, url, companyName, title }) {
                   ),
                   spacing: { before: 40, after: 40 },
                 })],
+                width: { size: colWidthDXA, type: WidthType.DXA },
                 shading: ri === 0 ? { fill: LIGHTGR, type: ShadingType.SOLID } : undefined,
               });
             }),
@@ -425,7 +508,7 @@ export async function exportToWord({ report, url, companyName, title }) {
 
         body.push(new Table({
           rows: docRows,
-          layout: TableLayoutType.AUTOFIT,
+          layout: TableLayoutType.FIXED,
           width: { size: 9000, type: WidthType.DXA },
         }));
         body.push(new Paragraph({ children: [], spacing: { before: 80, after: 80 } }));
