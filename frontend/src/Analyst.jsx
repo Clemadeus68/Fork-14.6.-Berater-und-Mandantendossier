@@ -43,7 +43,7 @@ function dlMd(name, content) {
 }
 function slug(str) { return (str || "Analyse").replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_").slice(0, 36); }
 function extractCompanyName(report) {
-  const m = report.match(/^#\s+(?:Vollständige Strategieanalyse|Unternehmensanalyse|Analyse):\s*(.+)$/m);
+  const m = report.match(/^#\s+(?:Vollständige Strategieanalyse|Strategieanalyse|Unternehmensanalyse|Analyse):\s*(.+)$/m);
   return m ? m[1].trim() : null;
 }
 async function parseStream(response, onChunk, onError) {
@@ -419,7 +419,7 @@ export default function Analyst() {
             <div style={s.cardTitle}>
               {loading
                 ? <><span style={s.spinner} />Strategieanalyse wird erstellt…</>
-                : <>Vollständige Strategieanalyse <span style={s.badgeTeal}>Dokument 1</span></>}
+                : <>Strategieanalyse <span style={s.badgeTeal}>Dokument 1</span></>}
             </div>
           </div>
 
@@ -440,7 +440,7 @@ export default function Analyst() {
                   disabled={pdfLoading}
                   onClick={async () => {
                     setPdfLoading(true);
-                    await exportToPDF({ chartCardRef, report, url, companyName: companyName || extraName, title: "Vollständige Strategieanalyse" });
+                    await exportToPDF({ chartCardRef, report, url, companyName: companyName || extraName, title: "Strategieanalyse" });
                     setPdfLoading(false);
                   }}>
                   {pdfLoading ? <><span style={s.spinner} />…</> : "📄 PDF"}
@@ -449,7 +449,7 @@ export default function Analyst() {
                   disabled={wordLoading}
                   onClick={async () => {
                     setWordLoading(true);
-                    await exportToWord({ report, url, companyName: companyName || extraName, title: "Vollständige Strategieanalyse" });
+                    await exportToWord({ report, url, companyName: companyName || extraName, title: "Strategieanalyse" });
                     setWordLoading(false);
                   }}>
                   {wordLoading ? <><span style={s.spinner} />…</> : "📝 Word"}

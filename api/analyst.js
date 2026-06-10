@@ -177,7 +177,7 @@ ${content}
 
 Schreibe jetzt vollständig und ohne Kürzungen:
 
-# Vollständige Strategieanalyse: [Firmenname]
+# Strategieanalyse: [Firmenname]
 *Erstellt am: ${today} | Quelle: ${url}*
 
 ## Inhaltsverzeichnis
