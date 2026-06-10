@@ -9,7 +9,7 @@ async function sistrixGet(endpoint, params, apiKey) {
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(12000) });
   const json = await res.json();
-  if (json.status === 'fail') throw new Error(json.error?.[0]?.error_message || 'Sistrix-Fehler');
+  if (json.status === 'fail' || json.status === 'error') throw new Error(json.error?.[0]?.error_message || 'Sistrix-Fehler');
   return json;
 }
 
@@ -112,16 +112,6 @@ export default async function handler(req) {
     };
   });
 
-  // Debug: collect rejected reasons + raw values
-  const debugErrors = [];
-  allDomains.forEach((d, i) => {
-    if (visResults[i].status === 'rejected') debugErrors.push(`vis[${d}]: ${visResults[i].reason}`);
-    else debugErrors.push(`vis[${d}] raw: ${JSON.stringify(visResults[i].value).slice(0, 200)}`);
-  });
-  top10.forEach((d, i) => {
-    if (trafficResults[i].status === 'rejected') debugErrors.push(`traffic[${d}]: ${trafficResults[i].reason}`);
-  });
-
   const result = {
     domain: mainDomain,
     visibility: visMap[mainDomain] ?? 0,
@@ -130,7 +120,6 @@ export default async function handler(req) {
     totalValue: mainTraffic.totalValue,
     topPages: mainTraffic.topPages,
     competitors: competitorData,
-    _debug: debugErrors.length > 0 ? debugErrors : undefined,
   };
 
   return new Response(JSON.stringify(result), {
