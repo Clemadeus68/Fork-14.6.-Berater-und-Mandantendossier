@@ -312,8 +312,8 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: anthropicHeaders,
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 16000,
+        model: 'claude-sonnet-4-6',
+        max_tokens: 32000,
         stream: true,
         messages: [{ role: 'user', content: prompt }],
       }),
