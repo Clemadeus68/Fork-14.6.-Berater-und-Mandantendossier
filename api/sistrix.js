@@ -112,6 +112,15 @@ export default async function handler(req) {
     };
   });
 
+  // Debug: collect rejected reasons
+  const debugErrors = [];
+  allDomains.forEach((d, i) => {
+    if (visResults[i].status === 'rejected') debugErrors.push(`vis[${d}]: ${visResults[i].reason}`);
+  });
+  top10.forEach((d, i) => {
+    if (trafficResults[i].status === 'rejected') debugErrors.push(`traffic[${d}]: ${trafficResults[i].reason}`);
+  });
+
   const result = {
     domain: mainDomain,
     visibility: visMap[mainDomain] ?? 0,
@@ -120,6 +129,7 @@ export default async function handler(req) {
     totalValue: mainTraffic.totalValue,
     topPages: mainTraffic.topPages,
     competitors: competitorData,
+    _debug: debugErrors.length > 0 ? debugErrors : undefined,
   };
 
   return new Response(JSON.stringify(result), {
