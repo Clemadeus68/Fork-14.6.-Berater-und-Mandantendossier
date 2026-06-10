@@ -1,4 +1,4 @@
-// Node.js runtime — extended output + long timeout
+// Node.js runtime — two sequential Claude calls to stay within 8192 token limit
 export const maxDuration = 300;
 
 export default async function handler(req, res) {
@@ -16,29 +16,22 @@ export default async function handler(req, res) {
   if (!strategieanalyse) return res.status(400).json({ error: 'strategieanalyse fehlt' });
 
   const today = new Date().toLocaleDateString('de-DE');
+  const name = companyName || url || 'Mandant';
 
-  const prompt = `Du bist Clemens Gutmann, Organisations- und Strategieberater (be nice Managementberatung).
+  // Shared context block (truncated to keep prompt short)
+  const analyseContext = strategieanalyse.slice(0, 14000);
 
-Du hast soeben die folgende Strategieanalyse erstellt:
+  const systemContext = `Du bist Clemens Gutmann, Organisations- und Strategieberater (be nice Managementberatung).
+INQA-zertifiziert in: Unternehmenskultur & Führung | Personal & Kompetenz | Digitalisierung & Innovation.
+Das Briefing ist vertraulich, nur für dich. Sei direkt, pointiert, ehrlich. Kein Consulting-Sprech.
+Basis-Analyse:\n${analyseContext}`;
 
-${strategieanalyse.slice(0, 18000)}
-
----
-
-Erstelle jetzt ein kompaktes AKQUISE-BRIEFING für dich selbst — zur Vorbereitung des Erstgesprächs mit diesem Unternehmen.
-
-Das Briefing ist vertraulich, für dich als Berater. Sei direkt, pointiert, ehrlich — auch kritisch gegenüber dem Unternehmen. Kein Blatt vor den Mund.
-
-Hintergrund zu deinen Themenfeldern als INQA-zertifizierter Berater:
-- **Unternehmenskultur & Führung**: Führungsdefizite, Kulturprobleme, Digitalisierungshemmnisse durch fehlende Leadership-Kompetenz
-- **Personal & Kompetenz**: Fachkräftemangel, Kompetenzlücken, HR-Probleme, Weiterbildungsbedarfe
-- **Digitalisierung & Innovation**: KI-Einführung, digitale Transformation, Prozessdigitalisierung, compliante KI-Nutzung, fehlende Digitalstrategie
-
-BAFA-Förderung ist für Erstberatungen relevant (bis 3.000 EUR Zuschuss).
+  const promptPart1 = `${systemContext}
 
 ---
+Erstelle TEIL 1 des Akquise-Briefings für ${name} (${today}):
 
-# Akquise-Briefing: ${companyName || url}
+# Akquise-Briefing: ${name}
 *Erstellt am: ${today} — vertraulich für Clemens Gutmann*
 
 ---
@@ -54,161 +47,145 @@ BAFA-Förderung ist für Erstberatungen relevant (bis 3.000 EUR Zuschuss).
 
 ## 1. Kerndefizite — priorisiert
 
-Die 5 drängendsten Defizite, geordnet nach Dringlichkeit und Beratungsrelevanz.
-Für jedes Defizit: Kurze Beschreibung + Kapitelreferenz aus der Strategieanalyse.
+Schreibe **5 Defizite**, jeweils mit:
+- **Bezeichnung** (prägnanter Titel)
+- **Befund:** Was genau ist das Problem? Konkret, direkt, Zahlen wenn vorhanden.
+- **Sichtbar in der Analyse:** Kapitelreferenz (z.B. Kap. 1.2)
+- **Wahrscheinliche Ursache:** Führung? Strategie? Ressourcen? Wissen? Ehrliche Einschätzung.
+- **Schmerz für den Mandanten:** Wie fühlt sich das für die Geschäftsführung an — in ihrer eigenen Sprache.
 
-### Defizit 1 — [Bezeichnung]
-**Befund:** [Was genau ist das Problem?]
-**Sichtbar in der Analyse:** [Kapitel X.X]
-**Wahrscheinliche Ursache:** [Führung? Strategie? Ressourcen? Wissen?]
-**Schmerz für den Mandanten:** [Wie fühlt sich das für die Geschäftsführung an?]
-
-### Defizit 2 — [Bezeichnung]
-**Befund:**
-**Sichtbar in der Analyse:**
-**Wahrscheinliche Ursache:**
-**Schmerz für den Mandanten:**
-
-### Defizit 3 — [Bezeichnung]
-**Befund:**
-**Sichtbar in der Analyse:**
-**Wahrscheinliche Ursache:**
-**Schmerz für den Mandanten:**
-
-### Defizit 4 — [Bezeichnung]
-**Befund:**
-**Sichtbar in der Analyse:**
-**Wahrscheinliche Ursache:**
-**Schmerz für den Mandanten:**
-
-### Defizit 5 — [Bezeichnung]
-**Befund:**
-**Sichtbar in der Analyse:**
-**Wahrscheinliche Ursache:**
-**Schmerz für den Mandanten:**
+Priorisierung: dringendste Defizite zuerst.
 
 ---
 
 ## 2. INQA-Anknüpfungspunkte
 
-Wo passen meine INQA-Themenfelder konkret zu den Defiziten dieses Unternehmens?
+Für jedes der drei INQA-Themenfelder:
+- **Relevanz:** hoch / mittel / niedrig
+- **Konkrete Anknüpfung:** Was zeigt die Analyse, das auf dieses Defizit hinweist?
+- **Mögliche INQA-Projektidee:** Konkrete Maßnahme, die ich anbieten könnte.
 
-### Unternehmenskultur & Führung
-**Relevanz für diesen Mandanten:** [hoch / mittel / niedrig]
-**Konkrete Anknüpfung:**
-[Was zeigt die Analyse, das auf Kultur- oder Führungsdefizite hindeutet?]
-**Mögliche INQA-Projektidee:**
+**Themenfeld 1: Unternehmenskultur & Führung**
+**Themenfeld 2: Personal & Kompetenz**
+**Themenfeld 3: Digitalisierung & Innovation**
 
-### Personal & Kompetenz
-**Relevanz für diesen Mandanten:** [hoch / mittel / niedrig]
-**Konkrete Anknüpfung:**
-**Mögliche INQA-Projektidee:**
+Am Ende: **INQA-Gesamteignung** (sehr gut / gut / bedingt / gering) mit Begründung.`;
 
-### Digitalisierung & Innovation
-**Relevanz für diesen Mandanten:** [hoch / mittel / niedrig]
-**Konkrete Anknüpfung:**
-[Besonders: KI-Einführung, digitale Sichtbarkeit, Strategie]
-**Mögliche INQA-Projektidee:**
-
-**INQA-Gesamteignung:** [sehr gut / gut / bedingt / gering] — Begründung:
+  const promptPart2 = (part1Text) => `${systemContext}
 
 ---
+Du hast soeben Teil 1 des Akquise-Briefings geschrieben. Hier ist er:
+
+${part1Text.slice(-4000)}
+
+---
+Schreibe jetzt TEIL 2 (Abschnitte 3–5) vollständig:
 
 ## 3. Beratungsleistungen — konkrete Ansatzpunkte
 
-Was kann ich diesem Unternehmen konkret anbieten? Realistisch, priorisiert.
+**Kurzfristig anbieten (Erstgespräch/Quick Wins):**
+3 konkrete Leistungen mit Begründung, warum genau jetzt.
 
-### Kurzfristig anbieten (Erstgespräch/Quick Wins):
-1. **[Leistung]** — [warum genau jetzt, was bringt es?]
-2. **[Leistung]** — ...
-3. **[Leistung]** — ...
+**Mittelfristiges Projekt (3–12 Monate):**
+- Projekthypothese: Was wäre ein realistisches Beratungsprojekt?
+- Umfang (grob): Tage/Monate
+- Partnerleistungen nötig? (Tech, Recht, Tools, Schulungen)
 
-### Mittelfristiges Projekt (3–12 Monate):
-**Projekthypothese:** [Was wäre ein realistisches Beratungsprojekt?]
-**Umfang (grob):** [Tage/Monate]
-**Partnerleistungen nötig?** [Tech, Recht, Toolauswahl, Schulungen — wen würde ich einbinden?]
-
-### BAFA-Erstberatung:
-**Passt das Unternehmen?** [Ja / Nein / Prüfen]
-**Begründung:**
+**BAFA-Erstberatung:**
+- Passt das Unternehmen? Ja / Nein / Prüfen
+- Begründung
 
 ---
 
 ## 4. Gesprächsstrategie & Einstieg
 
-### Mein Hauptthema fürs Erstgespräch:
-[Das eine Thema, das ich als Einstieg wählen würde — und warum]
+**Mein Hauptthema fürs Erstgespräch:**
+Das eine Thema, das ich als Einstieg wählen würde — und warum.
 
-### Die 3 besten Einstiegsfragen:
-1. [Frage — erwartete Reaktion / was ich damit auslösen will]
-2. [Frage — ...]
-3. [Frage — ...]
+**Die 3 besten Einstiegsfragen:**
+Für jede Frage: Formulierung + erwartete Reaktion / was ich damit auslösen will.
 
-### Hypothesen, die ich überprüfen will:
-1.
-2.
-3.
+**Hypothesen, die ich überprüfen will:** (3 Stück)
 
-### Was ich NICHT ansprechen sollte (noch nicht):
-[Was wäre zu früh, zu sensibel, oder könnte den Mandanten abschrecken?]
+**Was ich NICHT ansprechen sollte (noch nicht):**
+Was wäre zu früh, zu sensibel, oder könnte den Mandanten abschrecken?
 
 ---
 
 ## 5. Risikoeinschätzung & Qualifizierung
 
-**Ist das ein attraktiver Mandant für be nice?** [Ja / Bedingt / Nein] — Begründung:
+**Ist das ein attraktiver Mandant für be nice?** Ja / Bedingt / Nein — Begründung.
 
-**Wahrscheinlichkeit eines Erstauftrags:** [hoch / mittel / niedrig]
+**Wahrscheinlichkeit eines Erstauftrags:** hoch / mittel / niedrig
 
-**Mögliche Einwände des Mandanten:**
--
--
+**Mögliche Einwände des Mandanten:** (2 konkrete)
 
 **Meine Antwort auf den wichtigsten Einwand:**
 
-**Nächste Schritte nach dem Erstgespräch:**
-1.
-2.
+**Nächste Schritte nach dem Erstgespräch:** (2 Schritte)`;
 
----
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
 
-Fülle alle Abschnitte vollständig aus. Sei konkret und pointiert — kein generisches Consulting-Sprech.`;
+  const anthropicHeaders = {
+    'Content-Type': 'application/json',
+    'x-api-key': anthropicKey,
+    'anthropic-version': '2023-06-01',
+  };
 
-  try {
-    const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+  async function streamClaude(prompt, bufferOutput) {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'output-128k-2025-02-19',
-      },
+      headers: anthropicHeaders,
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 16000,
+        max_tokens: 8000,
         stream: true,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
-
-    if (!anthropicResponse.ok) {
-      const err = await anthropicResponse.json().catch(() => ({}));
-      return res.status(anthropicResponse.status).json({ error: `Claude Fehler: ${err.error?.message || anthropicResponse.status}` });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(`Claude Fehler: ${err.error?.message || r.status}`);
     }
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-
-    const reader = anthropicResponse.body.getReader();
+    const reader = r.body.getReader();
     const decoder = new TextDecoder();
-
+    let sseBuffer = '';
+    let collected = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      res.write(decoder.decode(value, { stream: true }));
+      const chunk = decoder.decode(value, { stream: true });
+      res.write(chunk);
+      if (bufferOutput) {
+        sseBuffer += chunk;
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const event = JSON.parse(data);
+            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+              collected += event.delta.text;
+            }
+          } catch (_) {}
+        }
+      }
     }
-    res.end();
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    return collected;
   }
+
+  try {
+    // Part 1: Abschnitte 1 + 2 (Kerndefizite + INQA)
+    const part1Text = await streamClaude(promptPart1, true);
+
+    // Part 2: Abschnitte 3 + 4 + 5 (with Part 1 as context)
+    await streamClaude(promptPart2(part1Text), false);
+  } catch (e) {
+    res.write(`data: {"type":"error","error":{"message":"${e.message}"}}\n\n`);
+  }
+
+  res.end();
 }
