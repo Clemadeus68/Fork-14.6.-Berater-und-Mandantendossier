@@ -490,10 +490,11 @@ export default async function handler(req, res) {
       'Content-Type': 'application/json',
       'x-api-key': anthropicKey,
       'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'output-128k-2025-02-19',
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-5',
-      max_tokens: 20000,
+      max_tokens: 32000,
       stream: true,
       messages: [{ role: 'user', content: prompt }],
     }),

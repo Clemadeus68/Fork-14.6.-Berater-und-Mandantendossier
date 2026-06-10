@@ -1,4 +1,5 @@
-// Node.js runtime — no Edge config (uses process.env reliably)
+// Node.js runtime — extended output + long timeout
+export const maxDuration = 300;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -180,10 +181,11 @@ Fülle alle Abschnitte vollständig aus. Sei konkret und pointiert — kein gene
         'Content-Type': 'application/json',
         'x-api-key': anthropicKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'output-128k-2025-02-19',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 8000,
+        max_tokens: 16000,
         stream: true,
         messages: [{ role: 'user', content: prompt }],
       }),
