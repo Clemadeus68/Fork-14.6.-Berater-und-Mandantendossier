@@ -6,9 +6,7 @@ function escHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Generate a consistent slug ID from heading text
 function slugId(text) {
-  // Strip {#custom-id} if present
   const custom = text.match(/\{#([a-z0-9-]+)\}$/);
   if (custom) return custom[1];
   return text
@@ -18,7 +16,6 @@ function slugId(text) {
     .replace(/^-|-$/g, '');
 }
 
-// Strip {#id} suffix from display text
 function cleanHeadingText(text) {
   return text.replace(/\s*\{#[a-z0-9-]+\}\s*$/, '').trim();
 }
@@ -29,7 +26,7 @@ function inlineMarkdown(s) {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\[([^\]]+)\]\(#([^)]+)\)/g, '<a href="#$2">$1</a>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$1" target="_blank">$2</a>');
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$1" target="_blank">$1</a>');
 }
 
 function parseMarkdown(md) {
@@ -107,40 +104,11 @@ function parseMarkdown(md) {
   return html.join('\n');
 }
 
-// ── TOC extraction ─────────────────────────────────────────────────────────────
-// Scans both # (H1) and ## (H2), builds a two-level TOC
-
-function extractHeadings(md) {
-  const headings = [];
-  for (const line of md.split('\n')) {
-    if (/^# /.test(line)) {
-      const raw = line.slice(2).trim();
-      const id = slugId(raw);
-      const label = cleanHeadingText(raw);
-      // Skip document title (first H1) and "Inhaltsverzeichnis"
-      if (label.toLowerCase().includes('inhaltsverzeichnis')) continue;
-      headings.push({ id, label, level: 1 });
-    } else if (/^## /.test(line)) {
-      const raw = line.slice(3).trim();
-      const id = slugId(raw);
-      const label = cleanHeadingText(raw);
-      if (label.toLowerCase().includes('inhaltsverzeichnis')) continue;
-      headings.push({ id, label, level: 2 });
-    }
-  }
-  // Remove the very first H1 (document title)
-  const firstH1 = headings.findIndex(h => h.level === 1);
-  if (firstH1 === 0) headings.shift();
-  return headings;
-}
-
-// ── Print HTML builder ─────────────────────────────────────────────────────────
+// ── PDF HTML builder ───────────────────────────────────────────────────────────
 
 function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title }) {
   const docTitle = title || 'Strategieanalyse';
 
-  // Build TOC from already-rendered markdown (we pass raw md separately)
-  // Note: tocHtml is passed in as pre-built HTML string
   return `<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -148,10 +116,10 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 <title>${docTitle} – ${escHtml(companyName || url || '')}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Calibri, 'Segoe UI', sans-serif; font-size: 11pt; color: #454544; background: white; padding: 2cm; padding-bottom: 3cm; }
+  body { font-family: Calibri, 'Segoe UI', sans-serif; font-size: 11pt; color: #454544; background: white; padding: 2cm; }
 
-  /* Print notice — screen only */
-  .print-notice { background: #f0f8e8; border-left: 4px solid #8CC63E; padding: 10px 16px; margin-bottom: 20px; border-radius: 0 5px 5px 0; font-size: 10pt; color: #454544; }
+  /* Instruction — screen only */
+  .print-notice { background: #f0f8e8; border-left: 4px solid #8CC63E; padding: 10px 16px; margin-bottom: 20px; border-radius: 0 5px 5px 0; font-size: 10pt; }
   @media print { .print-notice { display: none; } }
 
   /* Header */
@@ -159,26 +127,42 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
   .doc-header-title { font-size: 15pt; font-weight: 700; color: #454544; }
   .doc-header-meta { font-size: 9pt; color: #777; text-align: right; line-height: 1.6; }
 
-  /* TOC */
-  .toc { background: #f5fbee; border-left: 4px solid #8CC63E; padding: 14px 20px; margin-bottom: 32px; border-radius: 0 6px 6px 0; page-break-inside: avoid; }
-  .toc-title { font-size: 10pt; font-weight: 700; color: #8CC63E; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
-  .toc ul { list-style: none; padding-left: 0; margin: 0; }
-  .toc ul ul { padding-left: 18px; margin-top: 3px; }
-  .toc li { margin: 3px 0; font-size: 10pt; }
-  .toc li.toc-h1 > a { font-weight: 700; color: #454544; }
-  .toc li.toc-h2 > a { font-weight: 400; color: #13A1B6; }
-  .toc a { text-decoration: none; }
-  .toc a:hover { text-decoration: underline; }
-
   /* Charts */
   .charts-section { margin-bottom: 32px; page-break-inside: avoid; }
   .charts-section img { max-width: 100%; border-radius: 6px; border: 1px solid #E9E9E9; }
   .section-label { font-size: 9pt; font-weight: 700; color: #777; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
 
-  /* Content */
+  /* Headings */
   h1 { font-size: 15pt; font-weight: 700; color: #454544; margin: 28px 0 8px; padding-bottom: 6px; border-bottom: 3px solid #8CC63E; }
   h2 { font-size: 12pt; font-weight: 700; color: #454544; margin: 22px 0 7px; }
   h3 { font-size: 11pt; font-weight: 700; color: #33AB97; margin: 14px 0 5px; }
+
+  /* TOC section — styled box when Claude generates ## Inhaltsverzeichnis */
+  h2#inhaltsverzeichnis { display: none; }
+  h2#inhaltsverzeichnis + ul {
+    background: #f5fbee;
+    border-left: 4px solid #8CC63E;
+    padding: 12px 20px;
+    margin-bottom: 28px;
+    border-radius: 0 6px 6px 0;
+    list-style: none;
+    page-break-inside: avoid;
+  }
+  h2#inhaltsverzeichnis + ul::before {
+    content: "Inhaltsverzeichnis";
+    display: block;
+    font-size: 10pt;
+    font-weight: 700;
+    color: #8CC63E;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  h2#inhaltsverzeichnis + ul li { margin: 4px 0; font-size: 10pt; }
+  h2#inhaltsverzeichnis + ul li a { color: #13A1B6; text-decoration: none; }
+  h2#inhaltsverzeichnis + ul li a:hover { text-decoration: underline; }
+
+  /* Content */
   p { line-height: 1.65; margin: 5px 0; }
   ul, ol { padding-left: 20px; margin: 7px 0; }
   li { line-height: 1.6; margin: 2px 0; }
@@ -187,42 +171,23 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
   code { font-family: monospace; background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 9.5pt; }
   blockquote { border-left: 3px solid #8CC63E; padding: 6px 12px; background: #f5fbee; margin: 10px 0; font-style: italic; color: #555; border-radius: 0 4px 4px 0; }
   hr { border: none; border-top: 1px solid #E9E9E9; margin: 18px 0; }
-  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
-  th { background: #E9E9E9; padding: 7px 10px; text-align: left; font-weight: 700; border-bottom: 2px solid #ccc; }
-  td { padding: 6px 10px; border-bottom: 1px solid #E9E9E9; vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; table-layout: fixed; }
+  th { background: #E9E9E9; padding: 7px 10px; text-align: left; font-weight: 700; border-bottom: 2px solid #ccc; word-wrap: break-word; }
+  td { padding: 6px 10px; border-bottom: 1px solid #E9E9E9; vertical-align: top; word-wrap: break-word; }
   tr:nth-child(even) td { background: #fafafa; }
   a { color: #13A1B6; }
 
-  /* Footer — print only */
-  .print-footer {
-    display: none;
-  }
   @media print {
     body { font-size: 10pt; padding: 0; }
-    @page { margin: 2cm 2cm 2.5cm; }
-    .print-footer {
-      display: flex;
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      height: 1.2cm;
-      padding: 0 2cm;
-      justify-content: space-between;
-      align-items: center;
-      border-top: 1px solid #E9E9E9;
-      background: white;
-      font-size: 8pt;
-      color: #777;
-    }
-    .print-footer .page-num::after {
-      content: "Seite " counter(page);
-    }
+    @page { margin: 2cm; }
+    h2 { page-break-after: avoid; }
   }
 </style>
 </head>
 <body>
 
 <div class="print-notice">
-  <strong>Tipp für den PDF-Export:</strong> Im Druckdialog → "Weitere Einstellungen" → <strong>"Kopf- und Fußzeilen"</strong> deaktivieren, um "about:blank" zu entfernen.
+  <strong>Hinweis:</strong> Im Browser-Druckdialog → „Weitere Einstellungen" → <strong>„Kopf- und Fußzeilen" deaktivieren</strong>, um „about:blank" aus dem Footer zu entfernen. Die Seitenzahlen bleiben über den Browser-Footer erhalten.
 </div>
 
 <div class="doc-header">
@@ -245,41 +210,11 @@ ${chartImage ? `
 ` : ''}
 
 <div class="report-body">
-__REPORT_HTML__
-</div>
-
-<div class="print-footer">
-  <span>Clemens Gutmann | be nice Managementberatung | www.nice-network.de</span>
-  <span class="page-num"></span>
+${reportHtml}
 </div>
 
 </body>
 </html>`;
-}
-
-function buildTocHtml(headings, chartImage) {
-  if (headings.length === 0 && !chartImage) return '';
-
-  let items = '';
-  let inSublist = false;
-
-  if (chartImage) {
-    items += `<li class="toc-h2"><a href="#grafischer-ueberblick">SISTRIX-Ergebnisse</a></li>`;
-  }
-
-  for (const h of headings) {
-    if (h.level === 1) {
-      if (inSublist) { items += '</ul></li>'; inSublist = false; }
-      items += `<li class="toc-h1"><a href="#${h.id}">${escHtml(h.label)}</a>`;
-    } else {
-      if (!inSublist) { items += '<ul>'; inSublist = true; }
-      items += `<li class="toc-h2"><a href="#${h.id}">${escHtml(h.label)}</a></li>`;
-    }
-  }
-  if (inSublist) items += '</ul></li>';
-  else if (items.endsWith('</a>')) items += '</li>';
-
-  return `<div class="toc"><div class="toc-title">Inhaltsverzeichnis</div><ul>${items}</ul></div>`;
 }
 
 // ── PDF Export ─────────────────────────────────────────────────────────────────
@@ -295,13 +230,8 @@ export async function exportToPDF({ chartCardRef, report, url, companyName, titl
     } catch (e) { console.warn('Chart capture failed:', e); }
   }
 
-  const headings = extractHeadings(report || '');
-  const tocHtml = buildTocHtml(headings, chartImage);
   const reportHtml = parseMarkdown(report || '');
-
-  const template = buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title });
-  // Inject TOC before report body
-  const html = template.replace('__REPORT_HTML__', tocHtml + reportHtml);
+  const html = buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title });
 
   const win = window.open('', '_blank', 'width=900,height=700');
   if (!win) { alert('Bitte Popup-Blocker deaktivieren für PDF-Export.'); return; }
@@ -315,7 +245,11 @@ export async function exportToPDF({ chartCardRef, report, url, companyName, titl
 // ── Word Export (.docx) ────────────────────────────────────────────────────────
 
 export async function exportToWord({ report, url, companyName, title }) {
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel, BorderStyle, AlignmentType, Table, TableRow, TableCell, WidthType, ShadingType } = await import('docx');
+  const {
+    Document, Packer, Paragraph, TextRun, BorderStyle, AlignmentType,
+    Table, TableRow, TableCell, WidthType, ShadingType, TableLayoutType,
+    Header, Footer, PageNumber,
+  } = await import('docx');
 
   const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const docTitle = title || 'Strategieanalyse';
@@ -326,6 +260,22 @@ export async function exportToWord({ report, url, companyName, title }) {
   const MIDGR   = '777777';
   const LIGHTGR = 'E9E9E9';
 
+  // ── Inline parser ──────────────────────────────────────────────────────────
+  function parseInline(text) {
+    const segs = [];
+    const re = /\*\*(.+?)\*\*|\*(.+?)\*/g;
+    let last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) segs.push({ text: text.slice(last, m.index), bold: false, italic: false });
+      if (m[1]) segs.push({ text: m[1], bold: true, italic: false });
+      else if (m[2]) segs.push({ text: m[2], bold: false, italic: true });
+      last = re.lastIndex;
+    }
+    if (last < text.length) segs.push({ text: text.slice(last), bold: false, italic: false });
+    return segs.length ? segs : [{ text, bold: false, italic: false }];
+  }
+
+  // ── Paragraph helpers ──────────────────────────────────────────────────────
   function h1Para(text) {
     return new Paragraph({
       children: [new TextRun({ text: cleanHeadingText(text), bold: true, color: DARKGR, size: 32, font: 'Calibri' })],
@@ -345,22 +295,9 @@ export async function exportToWord({ report, url, companyName, title }) {
       spacing: { before: 180, after: 60 },
     });
   }
-  function parseInline(text) {
-    const segs = [];
-    const re = /\*\*(.+?)\*\*|\*(.+?)\*/g;
-    let last = 0, m;
-    while ((m = re.exec(text)) !== null) {
-      if (m.index > last) segs.push({ text: text.slice(last, m.index), bold: false, italic: false });
-      if (m[1]) segs.push({ text: m[1], bold: true, italic: false });
-      else if (m[2]) segs.push({ text: m[2], bold: false, italic: true });
-      last = re.lastIndex;
-    }
-    if (last < text.length) segs.push({ text: text.slice(last), bold: false, italic: false });
-    return segs.length ? segs : [{ text, bold: false, italic: false }];
-  }
-  function txtPara(text, opts = {}) {
+  function txtPara(text) {
     return new Paragraph({
-      children: parseInline(text).map(seg => new TextRun({ text: seg.text, bold: seg.bold || opts.bold, italics: seg.italic || opts.italic, color: DARKGR, size: 20, font: 'Calibri' })),
+      children: parseInline(text).map(seg => new TextRun({ text: seg.text, bold: seg.bold, italics: seg.italic, color: DARKGR, size: 20, font: 'Calibri' })),
       spacing: { before: 40, after: 40 },
     });
   }
@@ -382,70 +319,146 @@ export async function exportToWord({ report, url, companyName, title }) {
     return new Paragraph({
       children: [new TextRun({ text: '' })],
       border: { bottom: { color: LIGHTGR, style: BorderStyle.SINGLE, size: 6, space: 1 } },
-      spacing: { before: 120, after: 120 },
+      spacing: { before: 100, after: 100 },
     });
   }
 
-  const headerSection = [
+  // ── Header (every page) ────────────────────────────────────────────────────
+  const docHeader = new Header({
+    children: [
+      new Paragraph({
+        children: [
+          new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 18, font: 'Calibri' }),
+          new TextRun({ text: companyName ? `  |  ${companyName}` : '', color: MIDGR, size: 18, font: 'Calibri' }),
+        ],
+        alignment: AlignmentType.LEFT,
+        border: { bottom: { color: GREEN, style: BorderStyle.SINGLE, size: 6, space: 4 } },
+        spacing: { after: 80 },
+      }),
+    ],
+  });
+
+  // ── Footer with page numbers ───────────────────────────────────────────────
+  const docFooter = new Footer({
+    children: [
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Clemens Gutmann | be nice Managementberatung | www.nice-network.de', color: MIDGR, size: 16, font: 'Calibri' }),
+          new TextRun({ text: '    Seite ', color: MIDGR, size: 16, font: 'Calibri' }),
+          new TextRun({ children: [PageNumber.CURRENT], color: MIDGR, size: 16, font: 'Calibri' }),
+        ],
+        alignment: AlignmentType.LEFT,
+        border: { top: { color: LIGHTGR, style: BorderStyle.SINGLE, size: 4, space: 4 } },
+        spacing: { before: 80 },
+      }),
+    ],
+  });
+
+  // ── Title block (first page) ───────────────────────────────────────────────
+  const titleBlock = [
     new Paragraph({
-      children: [new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 36, font: 'Calibri' })],
+      children: [new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 40, font: 'Calibri' })],
       spacing: { before: 0, after: 80 },
       border: { bottom: { color: GREEN, style: BorderStyle.SINGLE, size: 16, space: 1 } },
     }),
     new Paragraph({
-      children: [new TextRun({ text: companyName || url || '', color: DARKGR, size: 24, font: 'Calibri' })],
+      children: [new TextRun({ text: companyName || url || '', color: DARKGR, size: 26, font: 'Calibri' })],
       spacing: { before: 80, after: 40 },
     }),
     new Paragraph({
       children: [new TextRun({ text: `Clemens Gutmann | be nice Managementberatung | ${today}`, color: MIDGR, size: 18, font: 'Calibri', italics: true })],
-      spacing: { before: 0, after: 240 },
+      spacing: { before: 0, after: 320 },
     }),
   ];
 
+  // ── Body from Markdown ─────────────────────────────────────────────────────
   const lines = (report || '').split('\n');
   const body = [];
   let i = 0;
 
   while (i < lines.length) {
     const line = lines[i];
+
     if (/^# /.test(line)) { body.push(h1Para(line.slice(2).trim())); i++; continue; }
     if (/^## /.test(line)) { body.push(h2Para(line.slice(3).trim())); i++; continue; }
     if (/^### /.test(line)) { body.push(h3Para(line.slice(4).trim())); i++; continue; }
     if (/^---+$/.test(line.trim())) { body.push(hrPara()); i++; continue; }
+
     if (/^[-*] /.test(line)) {
-      while (i < lines.length && /^[-*] /.test(lines[i])) { body.push(bulletPara(lines[i].slice(2).trim())); i++; }
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        body.push(bulletPara(lines[i].slice(2).trim())); i++;
+      }
       continue;
     }
     if (/^\d+\. /.test(line)) {
-      while (i < lines.length && /^\d+\. /.test(lines[i])) { body.push(numPara(lines[i].replace(/^\d+\.\s*/, '').trim())); i++; }
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        body.push(numPara(lines[i].replace(/^\d+\.\s*/, '').trim())); i++;
+      }
       continue;
     }
+
     if (/^\|/.test(line)) {
       const rows = [];
       while (i < lines.length && /^\|/.test(lines[i])) { rows.push(lines[i]); i++; }
-      const parsed = rows.filter(r => !/^\|[-| :]+\|$/.test(r.trim())).map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+      const parsed = rows
+        .filter(r => !/^\|[-| :]+\|$/.test(r.trim()))
+        .map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+
       if (parsed.length > 0) {
         const colCount = Math.max(...parsed.map(r => r.length));
-        const docRows = parsed.map((cells, ri) => new TableRow({
-          children: cells.map(cell => new TableCell({
-            children: [new Paragraph({ children: [new TextRun({ text: cell, bold: ri === 0, color: DARKGR, size: 18, font: 'Calibri' })], spacing: { before: 30, after: 30 } })],
-            shading: ri === 0 ? { fill: LIGHTGR, type: ShadingType.SOLID } : undefined,
-            width: { size: Math.floor(9000 / colCount), type: WidthType.DXA },
-          }))
+        const docRows = parsed.map((cells, ri) =>
+          new TableRow({
+            children: Array.from({ length: colCount }, (_, ci) => {
+              const cellText = cells[ci] || '';
+              return new TableCell({
+                children: [new Paragraph({
+                  children: parseInline(cellText).map(seg =>
+                    new TextRun({ text: seg.text, bold: ri === 0 || seg.bold, italics: seg.italic, color: DARKGR, size: 18, font: 'Calibri' })
+                  ),
+                  spacing: { before: 40, after: 40 },
+                })],
+                shading: ri === 0 ? { fill: LIGHTGR, type: ShadingType.SOLID } : undefined,
+              });
+            }),
+          })
+        );
+
+        body.push(new Table({
+          rows: docRows,
+          layout: TableLayoutType.AUTOFIT,
+          width: { size: 9000, type: WidthType.DXA },
         }));
-        body.push(new Table({ rows: docRows, width: { size: 9000, type: WidthType.DXA } }));
         body.push(new Paragraph({ children: [], spacing: { before: 80, after: 80 } }));
       }
       continue;
     }
-    if (line.trim() === '') { body.push(new Paragraph({ children: [], spacing: { before: 40, after: 40 } })); i++; continue; }
+
+    if (line.trim() === '') {
+      body.push(new Paragraph({ children: [], spacing: { before: 40, after: 40 } }));
+      i++; continue;
+    }
     body.push(txtPara(line.trim()));
     i++;
   }
 
+  // ── Assemble document ──────────────────────────────────────────────────────
   const doc = new Document({
-    numbering: { config: [{ reference: 'default-numbering', levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: AlignmentType.LEFT }] }] },
-    sections: [{ children: [...headerSection, ...body] }],
+    numbering: {
+      config: [{
+        reference: 'default-numbering',
+        levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: AlignmentType.LEFT }],
+      }],
+    },
+    sections: [{
+      properties: {
+        page: {
+          margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+        },
+      },
+      headers: { default: docHeader },
+      footers: { default: docFooter },
+      children: [...titleBlock, ...body],
+    }],
   });
 
   const blob = await Packer.toBlob(doc);

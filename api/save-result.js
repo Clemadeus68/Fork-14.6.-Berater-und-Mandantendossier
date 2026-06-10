@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Ungültiges JSON' }); }
   }
 
-  const { url, companyName, report, sistrixData, competitors } = body || {};
+  const { url, companyName, report, briefing, sistrixData, competitors } = body || {};
   if (!report && !sistrixData) return res.status(400).json({ error: 'Keine Daten' });
 
   const id = randomUUID().replace(/-/g, '').slice(0, 12);
@@ -25,6 +25,7 @@ export default async function handler(req, res) {
     url: url || '',
     companyName: companyName || '',
     report: report || '',
+    briefing: briefing || '',
     sistrixData: sistrixData || null,
     competitors: competitors || [],
     createdAt: new Date().toISOString().slice(0, 10),
