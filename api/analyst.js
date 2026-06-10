@@ -51,6 +51,8 @@ async function crawlWithFirecrawl(url, apiKey) {
             location: { type: 'string' },
             contactPerson: { type: 'string' },
             linkedinUrl: { type: 'string' },
+            employeeCount: { type: 'string' },
+            foundingYear: { type: 'string' },
           }
         }
       },
@@ -86,11 +88,12 @@ function visTier(v) {
 function buildSistrixBlock(sistrix, competitorData) {
   if (!sistrix) return '';
   const { domain, visibility, totalClicks, totalKeywords, totalValue, topPages } = sistrix;
-  const pagesBlock = topPages.map(p => `  - ${p.path} | ~${p.clicks ?? Math.round(p.click_estimation ?? 0)} Klicks/Mo | ${p.keywords} Keywords`).join('\n');
+  const pagesBlock = topPages.map(p =>
+    `  - ${p.path} | ~${p.clicks ?? Math.round(p.click_estimation ?? 0)} Klicks/Mo | ${p.keywords} Keywords`
+  ).join('\n');
 
   let compBlock = '';
   if (competitorData && competitorData.length > 0) {
-    // Already sorted by visibility (sistrix.js delivers them that way), main always first
     const all = [
       { domain, visibility: visibility ?? 0, totalClicks, totalKeywords, totalValue, isMain: true },
       ...competitorData.map(c => ({ ...c, isMain: false })),
@@ -105,7 +108,7 @@ function buildSistrixBlock(sistrix, competitorData) {
     ).join('\n');
 
     compBlock = `
-WETTBEWERB-VOLLVERGLEICH (SISTRIX Top-${total}, Deutschland):
+WETTBEWERB-VOLLVERGLEICH — DIGITALE SICHTBARKEIT (SISTRIX, Deutschland):
   ✱ = analysierte Domain
   | Domain | Sichtbarkeit | Klicks/Mo | Keywords | Einordnung |
   |---|---|---|---|---|
@@ -129,48 +132,80 @@ ${pagesBlock || '  (keine Daten verfügbar)'}
 ${compBlock}`;
 }
 
-function buildPrompt(url, crawlResult, sistrix, competitorData) {
+function buildPrompt(url, crawlResult, sistrix, competitorData, extraMeta) {
   const { markdown, metadata, extract } = crawlResult;
   const metaBlock = [
     metadata.title && `Titel: ${metadata.title}`,
     metadata.description && `Meta-Description: ${metadata.description}`,
     metadata.ogTitle && metadata.ogTitle !== metadata.title && `OG-Titel: ${metadata.ogTitle}`,
-    metadata.ogDescription && `OG-Description: ${metadata.ogDescription}`,
     extract.companyName && `Erkannter Firmenname: ${extract.companyName}`,
     extract.location && `Erkannter Standort: ${extract.location}`,
     extract.contactPerson && `Erkannter Ansprechpartner: ${extract.contactPerson}`,
     extract.linkedinUrl && `LinkedIn: ${extract.linkedinUrl}`,
+    extract.employeeCount && `Mitarbeiter: ${extract.employeeCount}`,
+    extract.foundingYear && `Gründungsjahr: ${extract.foundingYear}`,
+    extraMeta?.name && `Manuell: Firmenname = ${extraMeta.name}`,
+    extraMeta?.branche && `Manuell: Branche = ${extraMeta.branche}`,
+    extraMeta?.produkt && `Manuell: Produkt/DL = ${extraMeta.produkt}`,
   ].filter(Boolean).join('\n');
 
-  const content = markdown.slice(0, 12000);
+  const content = markdown.slice(0, 14000);
   const today = new Date().toLocaleDateString('de-DE');
-
   const sistrixBlock = buildSistrixBlock(sistrix, competitorData);
+  const hasCompetitors = competitorData && competitorData.length > 0;
+  const visStr = sistrix ? `${sistrix.visibility.toFixed(2)} (${visTier(sistrix.visibility)})` : '(keine SISTRIX-Daten)';
+  const clicksStr = sistrix ? sistrix.totalClicks.toLocaleString('de-DE') : '—';
+  const kwStr = sistrix ? sistrix.totalKeywords.toLocaleString('de-DE') : '—';
 
   return `Du bist ein erfahrener Unternehmensberater und Strategy Analyst. Du analysierst Unternehmen vor dem ersten Beratungsgespräch.
 
-Analysiere das folgende Unternehmen auf Basis der gecrawlten Website-Inhalte${sistrixBlock ? ' und externer SISTRIX-Daten' : ''} und erstelle einen vollständigen Analyse-Report.
+Erstelle eine vollständige Strategieanalyse auf Basis der gecrawlten Website-Inhalte${sistrixBlock ? ' und externer SISTRIX-Daten' : ''}.
 
 WEBSITE: ${url}
 
-META-DATEN UND EXTRAHIERTE STRUKTURDATEN:
+META-DATEN:
 ${metaBlock || '(keine Meta-Daten gefunden)'}
 ${sistrixBlock}
-GECRAWLTER WEBSITE-INHALT (Markdown, erste 12.000 Zeichen):
+GECRAWLTER WEBSITE-INHALT (erste 14.000 Zeichen):
 ${content}
 
 ---
 
-Erstelle einen strukturierten Report im folgenden Markdown-Format. Triff fundierte Hypothesen, auch wenn Informationen fehlen – kennzeichne Unsicherheiten mit "(Hypothese)" oder "(unklar)". Sei direkt, konkret und handlungsorientiert.
+Erstelle den folgenden Report vollständig. Fundierte Hypothesen sind erwünscht — kennzeichne Unsicherheiten mit "(Hypothese)". Direkt, konkret, handlungsorientiert. Keine Füllsätze.
 
 ---
 
-# Unternehmensanalyse: [Firmenname einsetzen]
+# Vollständige Strategieanalyse: [Firmenname einsetzen]
 *Erstellt am: ${today} | Quelle: ${url}*
 
 ---
 
-## 1. Unternehmensprofil
+## Inhaltsverzeichnis
+
+- [Kapitel 1: Unternehmen, Markt & Wettbewerb](#kapitel-1-unternehmen-markt--wettbewerb)
+  - [1.1 Unternehmensprofil](#11-unternehmensprofil)
+  - [1.2 Positionierungsdiagnose](#12-positionierungsdiagnose)
+  - [1.3 Angebot & Zielgruppen](#13-angebot--zielgruppen)
+  - [1.4 Marktanalyse](#14-marktanalyse)
+  - [1.5 Wettbewerbslandschaft](#15-wettbewerbslandschaft)
+  - [1.6 Branchenstruktur & Trends](#16-branchenstruktur--trends)
+  - [1.7 Regulierung & Fördermittel](#17-regulierung--fördermittel)
+  - [1.8 Differenzierung & Wachstumshemmnisse](#18-differenzierung--wachstumshemmnisse)
+- [Kapitel 2: Digitale Außensicht & Sichtbarkeit](#kapitel-2-digitale-außensicht--sichtbarkeit)
+  - [2.1 Webseitenanalyse](#21-webseitenanalyse)
+  - [2.2 Digitale Sichtbarkeit (SISTRIX)](#22-digitale-sichtbarkeit-sistrix)
+  - [2.3 Wettbewerbsvergleich digital](#23-wettbewerbsvergleich-digital)
+  - [2.4 Demand Gaps & Quick Wins](#24-demand-gaps--quick-wins)
+- [Kapitel 3: Synthese & Gesprächsvorbereitung](#kapitel-3-synthese--gesprächsvorbereitung)
+  - [3.1 Analyse-Score](#31-analyse-score)
+  - [3.2 Priorisierte Problemfelder](#32-priorisierte-problemfelder)
+  - [3.3 Executive Summary & Einstiegsfragen](#33-executive-summary--einstiegsfragen)
+
+---
+
+# Kapitel 1: Unternehmen, Markt & Wettbewerb
+
+## 1.1 Unternehmensprofil
 
 | Feld | Inhalt |
 |------|--------|
@@ -178,185 +213,161 @@ Erstelle einen strukturierten Report im folgenden Markdown-Format. Triff fundier
 | **Website** | ${url} |
 | **Branche** | |
 | **Standort** | |
-| **Unternehmensgröße** | (Schätzung) |
-| **Ziel des Kontakts** | (Hypothese) |
+| **Unternehmensgröße** | |
+| **Gründungsjahr** | |
+| **Vermuteter Anlass des Erstkontakts** | (Hypothese) |
 | **Vermutete Herausforderungen** | |
-| **Relevante Analysebereiche** | |
-
-**Optionale Felder** *(sofern erkennbar)*:
-- LinkedIn:
-- Northdata:
-- Impressum-URL:
-- Ansprechpartner:
+| **Ansprechpartner** | |
+| **LinkedIn** | |
 
 ---
 
-## 2. Positionierungsdiagnose
+## 1.2 Positionierungsdiagnose
 
-Kurze Zusammenfassung (3–5 Sätze): Wie positioniert sich das Unternehmen aktuell? Was ist der erste Eindruck?
-
----
-
-## 3. Zielgruppenhypothese
-
-**Wahrscheinliche Kernzielgruppe:**
-
-**Adressierte Kundengruppen:**
-
-**Spezifität der Zielgruppe:** [hoch / mittel / niedrig] – Begründung:
+[3–5 Sätze: Wie positioniert sich das Unternehmen? Erster Eindruck der Außendarstellung? Klar, differenziert, konsistent?]
 
 ---
 
-## 4. Was verkauft das Unternehmen?
+## 1.3 Angebot & Zielgruppen
 
 **Produkte / Leistungen:**
 
 **Welche Probleme werden gelöst?**
 
-**Leistungsversprechen:** (Wird eher über Leistungen oder Ergebnisse gesprochen?)
+**Wahrscheinliche Kernzielgruppe:**
+
+**Adressierte Kundengruppen:**
+
+**Spezifität der Zielgruppenansprache:** [hoch / mittel / niedrig] — Begründung:
 
 ---
 
-## 5. Differenzierungsgrad
+## 1.4 Marktanalyse
 
-**Bewertung:** [Hoch / Mittel / Niedrig]
+**Marktgröße (Deutschland / DACH / Europa):**
 
-**Begründung:**
+**Wachstumsrate (letzte 3 Jahre) und Prognose (nächste 3 Jahre):**
+
+**Wesentliche Wachstumstreiber:**
+-
+-
+-
+
+**Dämpfende Faktoren:**
+-
+-
+
+---
+
+## 1.5 Wettbewerbslandschaft
+
+**3–5 relevante Wettbewerber:**
+
+1. **[Name]** — Positionierung, Stärken, geschätzter Marktanteil
+2. **[Name]** — ...
+3. **[Name]** — ...
+
+**Aktuelle Wettbewerbsdynamiken:**
+
+---
+
+## 1.6 Branchenstruktur & Trends
+
+**Kritische Stufen der Wertschöpfungskette:**
+
+**Konzentrationsgrad:** [fragmentiert / mittel / oligopolistisch]
+
+**Eintrittsbarrieren:**
+
+**5 wesentliche Branchentrends (nächste 5 Jahre):**
+1.
+2.
+3.
+4.
+5.
+
+**Technologische Disruption:**
+
+---
+
+## 1.7 Regulierung & Fördermittel
+
+**Relevante gesetzliche Anforderungen:**
+
+**Relevante Förderprogramme für dieses Unternehmen:**
+(BAFA, INQA, KfW, EU-Fonds — was käme konkret infrage?)
+
+---
+
+## 1.8 Differenzierung & Wachstumshemmnisse
+
+**Differenzierungsgrad:** [Hoch / Mittel / Niedrig]
 
 **Wodurch unterscheidet sich das Unternehmen?**
 
-**Ist die Kommunikation generisch oder konkret?**
+**Kommunikation:** [konkret / generisch — Begründung]
 
----
+**Die 3 größten erkennbaren Wachstumshemmnisse:**
+1.
+2.
+3.
 
-## 6. Angebotsklarheit
-
-**Bewertung:** [Hoch / Mittel / Niedrig]
-
-**Begründung:**
-
----
-
-## 7. Wachstumshemmnisse
-
-Die drei größten erkennbaren Herausforderungen:
-
+**Die 3 größten erkennbaren Chancen:**
 1.
 2.
 3.
 
 ---
 
-## 8. Chancen
+# Kapitel 2: Digitale Außensicht & Sichtbarkeit
 
-Die drei größten erkennbaren Chancen:
+## 2.1 Webseitenanalyse
 
-1.
-2.
-3.
+**10-Sekunden-Test:** [Ja / Teilweise / Nein] — Begründung:
+
+**Stärken der Website:**
+-
+-
+
+**Lücken im Vergleich zu Best Practice:**
+-
+-
+-
+
+**Call-to-Action-Qualität:** [klar / schwach / fehlend]
+
+**Sprachliche Qualität:** [konkret / generisch / Jargon-lastig]
 
 ---
 
-## 9. Executive Summary
+## 2.2 Digitale Sichtbarkeit (SISTRIX)
 
-*"Wenn ich morgen mit dem Geschäftsführer sprechen würde – was müsste ich wissen? Und was fragen?"*
+> Arbeite ausschließlich mit den gelieferten SISTRIX-Zahlen — keine Erfindungen.
 
-**Was ich wissen sollte:**
--
--
+**Sichtbarkeitsindex:** ${visStr}
+**Organische Klicks/Monat:** ${clicksStr}
+**Rankende Keywords:** ${kwStr}
+
+**Themen mit der höchsten Suchnachfrage:**
+(Leite aus Top-Seiten-URLs und Klick-Zahlen konkrete Suchthemen ab)
 -
 -
 -
 
-**Was ich fragen würde:**
--
--
--
--
--
+**Strategische Einordnung:**
+[Was bedeutet diese Sichtbarkeitslage für das Unternehmen?]
 
 ---
 
-## 10. Analyse-Score
+## 2.3 Wettbewerbsvergleich digital
 
-| Dimension | Score | Begründung |
-|-----------|-------|------------|
-| Positionierung | /10 | |
-| Zielgruppenklarheit | /10 | |
-| Angebotsklarheit | /10 | |
-| Differenzierung | /10 | |
-| Kommunikationsstärke | /10 | |
-| **Gesamt** | **/10** | |
+${hasCompetitors
+  ? `> Basis: SISTRIX-Vergleich mit ${competitorData.length} Wettbewerbern.`
+  : `> Keine Wettbewerber-Sichtbarkeitsdaten verfügbar — allgemeine Brancheneinordnung.`}
 
----
+**Positionierung im digitalen Wettbewerb:**
 
-## 11. Nachfrageanalyse (SISTRIX)
-
-> Grundlage: organische Traffic-Daten der analysierten Domain und aller Wettbewerber aus SISTRIX. Arbeite ausschließlich mit den oben gelieferten Zahlen — keine Annahmen, keine Erfindungen.
-
-### Themen mit der höchsten Suchnachfrage
-
-Analysiere die Top-Seiten der analysierten Domain nach ihren URL-Pfaden und Klick-Zahlen. Welche Themen und Suchintentionen stecken dahinter? Was suchen Menschen konkret, wenn sie auf diese Seiten landen? Nenne die Themen explizit mit den zugehörigen Klick-Zahlen aus den SISTRIX-Daten.
-
--
--
--
--
-
-### Nachfrage-Vergleich mit Wettbewerbern
-
-Vergleiche die Top-Seiten der Wettbewerber mit denen der analysierten Domain. Welche Themen ranken bei Wettbewerbern stark, fehlen aber im Traffic-Profil des Kunden? Welche Themen besetzt der Kunde, die Wettbewerber nicht haben? Nenne konkrete URL-Pfade und Klick-Differenzen.
-
--
--
--
--
-
-### Demand Gaps — unbesetzte Nachfrage
-
-Welche Themen werden von keinem der analysierten Wettbewerber systematisch bedient, obwohl die Branche und das Geschäftsmodell sie nahelegen? Was fehlt im gesamten Wettbewerbsfeld an digitalen Inhalten?
-
-1.
-2.
-3.
-
-### Handlungsempfehlungen aus der Nachfrageanalyse
-
-Konkrete, umsetzbare Empfehlungen auf Basis der obigen Erkenntnisse. Was sollte der Kunde als nächstes angehen, um Nachfragepotenzial zu erschließen?
-
-1.
-2.
-3.
-
----
-
-## 12. Wettbewerbssichtbarkeit
-
-> Basis: SISTRIX Sichtbarkeitsindex der identifizierten Wettbewerber (Deutschland, organische Suche)
-
-${competitorData && competitorData.length > 0
-  ? `**Verfügbare Wettbewerbsdaten:** ${competitorData.length} Wettbewerber mit SISTRIX-Daten vorhanden.`
-  : `**Hinweis:** Für diese Analyse lagen keine Wettbewerber-Sichtbarkeitsdaten vor. Bitte den Abschnitt entsprechend kennzeichnen.`}
-
-### Positionierung im digitalen Wettbewerb
-
-*Ordne die analysierte Domain in das digitale Wettbewerbsfeld ein. Wer führt? Wer liegt zurück? Ist das überraschend oder erwartbar?*
-
--
--
--
-
-### Interpretation der Sichtbarkeitsunterschiede
-
-*Was bedeuten die Sichtbarkeitsunterschiede strategisch? Sind sie auf Branchendynamiken zurückzuführen (z.B. SEO-intensiver Wettbewerb), auf Ressourcen, auf Alter der Domain, auf Positionierungsstrategie?*
-
--
--
--
-
-### Chancen und Risiken aus dem Sichtbarkeitsvergleich
-
-*Was konkret sollte das Unternehmen tun – oder vermeiden – angesichts dieser digitalen Wettbewerbsposition?*
+**Interpretation der Sichtbarkeitsunterschiede:**
 
 **Chancen:**
 1.
@@ -368,9 +379,71 @@ ${competitorData && competitorData.length > 0
 
 ---
 
-Fülle alle Abschnitte vollständig aus. Schreibe vollständig und ohne Kürzungen.
-Kapitel 11: Arbeite ausschließlich mit den gelieferten SISTRIX Top-Seiten-Daten. Leite Suchthemen aus URL-Pfaden und Klick-Zahlen ab — nenne konkrete Zahlen, keine Pauschalaussagen.
-Kapitel 12: Nutze die SISTRIX-Vergleichstabelle. Interpretiere die Sichtbarkeitsunterschiede strategisch.`;
+## 2.4 Demand Gaps & Quick Wins
+
+**Unbesetzte Nachfrage (keine systematische Bedienung durch Wettbewerber):**
+1.
+2.
+3.
+
+**Konkrete Quick Wins — priorisiert:**
+1. **(sofort, 0–4 Wochen):**
+2. **(kurzfristig, 1–3 Monate):**
+3. **(mittelfristig, 3–6 Monate):**
+
+---
+
+# Kapitel 3: Synthese & Gesprächsvorbereitung
+
+## 3.1 Analyse-Score
+
+| Dimension | Score | Begründung |
+|-----------|-------|------------|
+| Positionierungsklarheit | /10 | |
+| Zielgruppenklarheit | /10 | |
+| Angebotsklarheit | /10 | |
+| Differenzierung | /10 | |
+| Digitale Sichtbarkeit | /10 | |
+| Kommunikationsstärke | /10 | |
+| **Gesamteindruck** | **/10** | |
+
+---
+
+## 3.2 Priorisierte Problemfelder
+
+**Kurzfristig (0–12 Monate) — akuter Handlungsbedarf:**
+- Symptome beim Mandanten:
+- Belege aus der Analyse:
+
+**Mittelfristig (1–3 Jahre) — strategische Lücken:**
+- Markt-/Wettbewerbsveränderungen ohne Reaktion:
+
+**Langfristig (3–7 Jahre) — strukturelle Herausforderungen:**
+- Disruptionspotenziale:
+
+---
+
+## 3.3 Executive Summary & Einstiegsfragen
+
+**Was ich wissen sollte (5 wichtigste Punkte):**
+-
+-
+-
+-
+-
+
+**Was ich fragen würde (5 Einstiegsfragen als offene Hypothesen):**
+-
+-
+-
+-
+-
+
+---
+
+Fülle alle Abschnitte vollständig aus — keine Kürzungen.
+Kapitel 2.2/2.3: Nur mit gelieferten SISTRIX-Zahlen arbeiten, konkrete Zahlen nennen.
+Kapitel 1.4–1.6: Fundierte Hypothesen sind ausdrücklich erwünscht, bitte kennzeichnen.`;
 }
 
 export default async function handler(req) {
@@ -383,7 +456,6 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
-
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -400,7 +472,7 @@ export default async function handler(req) {
     status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-  const { url, competitorData = [] } = await req.json();
+  const { url, competitorData = [], extraMeta = {} } = await req.json();
   if (!url) return new Response(JSON.stringify({ error: 'URL fehlt' }), {
     status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
@@ -409,7 +481,6 @@ export default async function handler(req) {
   const sistrixKey = process.env.SISTRIX_API_KEY;
   const domain = new URL(targetUrl).hostname.replace(/^www\./, '');
 
-  // Step 1: Firecrawl + Sistrix parallel
   let crawlResult;
   let sistrix = null;
   try {
@@ -426,8 +497,7 @@ export default async function handler(req) {
     });
   }
 
-  // Step 2: Claude streaming
-  const prompt = buildPrompt(targetUrl, crawlResult, sistrix, competitorData);
+  const prompt = buildPrompt(targetUrl, crawlResult, sistrix, competitorData, extraMeta);
 
   const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -438,7 +508,7 @@ export default async function handler(req) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-5',
-      max_tokens: 16000,
+      max_tokens: 20000,
       stream: true,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -451,14 +521,12 @@ export default async function handler(req) {
     });
   }
 
-  // Pass Claude's SSE stream directly to the client
   return new Response(anthropicResponse.body, {
     status: 200,
     headers: {
       ...corsHeaders,
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'X-Content-Length': String(crawlResult.markdown.length),
     },
   });
 }
