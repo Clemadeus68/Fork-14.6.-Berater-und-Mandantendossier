@@ -133,7 +133,7 @@ ${pagesBlock || '  (keine Daten verfügbar)'}
 ${compBlock}`;
 }
 
-function buildPrompt(url, crawlResult, sistrix, competitorData, extraMeta) {
+function buildContext(url, crawlResult, sistrix, competitorData, extraMeta) {
   const { markdown, metadata, extract } = crawlResult;
   const metaBlock = [
     metadata.title && `Titel: ${metadata.title}`,
@@ -150,301 +150,117 @@ function buildPrompt(url, crawlResult, sistrix, competitorData, extraMeta) {
     extraMeta?.produkt && `Manuell: Produkt/DL = ${extraMeta.produkt}`,
   ].filter(Boolean).join('\n');
 
-  const content = markdown.slice(0, 14000);
-  const today = new Date().toLocaleDateString('de-DE');
+  const content = markdown.slice(0, 12000);
   const sistrixBlock = buildSistrixBlock(sistrix, competitorData);
+  return { metaBlock, content, sistrixBlock };
+}
+
+function buildPromptPart1(url, crawlResult, sistrix, competitorData, extraMeta) {
+  const { metaBlock, content, sistrixBlock } = buildContext(url, crawlResult, sistrix, competitorData, extraMeta);
+  const today = new Date().toLocaleDateString('de-DE');
   const hasCompetitors = competitorData && competitorData.length > 0;
   const visStr = sistrix ? `${sistrix.visibility.toFixed(2)} (${visTier(sistrix.visibility)})` : '(keine SISTRIX-Daten)';
   const clicksStr = sistrix ? sistrix.totalClicks.toLocaleString('de-DE') : '—';
   const kwStr = sistrix ? sistrix.totalKeywords.toLocaleString('de-DE') : '—';
 
-  return `Du bist ein erfahrener Unternehmensberater und Strategy Analyst. Du analysierst Unternehmen vor dem ersten Beratungsgespräch.
+  return `Du bist ein erfahrener Unternehmensberater. Du erstellst TEIL 1 einer Strategieanalyse (Kapitel 1 + 2) für das erste Beratungsgespräch.
 
-Erstelle eine vollständige Strategieanalyse auf Basis der gecrawlten Website-Inhalte${sistrixBlock ? ' und externer SISTRIX-Daten' : ''}.
+Schreibe direkt, konkret, hypothesenstark. Kennzeichne Annahmen mit "(Hypothese)". Keine Füllsätze.
 
 WEBSITE: ${url}
-
-META-DATEN:
-${metaBlock || '(keine Meta-Daten gefunden)'}
+META-DATEN: ${metaBlock || '(keine)'}
 ${sistrixBlock}
-GECRAWLTER WEBSITE-INHALT (erste 14.000 Zeichen):
+WEBSITE-INHALT (erste 12.000 Zeichen):
 ${content}
 
 ---
 
-Erstelle den folgenden Report vollständig. Fundierte Hypothesen sind erwünscht — kennzeichne Unsicherheiten mit "(Hypothese)". Direkt, konkret, handlungsorientiert. Keine Füllsätze.
+Schreibe jetzt vollständig und ohne Kürzungen:
 
----
-
-# Vollständige Strategieanalyse: [Firmenname einsetzen]
+# Vollständige Strategieanalyse: [Firmenname]
 *Erstellt am: ${today} | Quelle: ${url}*
 
----
-
 ## Inhaltsverzeichnis
-
-- [Kapitel 1: Unternehmen, Markt & Wettbewerb](#kapitel-1-unternehmen-markt--wettbewerb)
-  - [1.1 Unternehmensprofil](#11-unternehmensprofil)
-  - [1.2 Positionierungsdiagnose](#12-positionierungsdiagnose)
-  - [1.3 Angebot & Zielgruppen](#13-angebot--zielgruppen)
-  - [1.4 Marktanalyse](#14-marktanalyse)
-  - [1.5 Wettbewerbslandschaft](#15-wettbewerbslandschaft)
-  - [1.6 Branchenstruktur & Trends](#16-branchenstruktur--trends)
-  - [1.7 Regulierung & Fördermittel](#17-regulierung--fördermittel)
-  - [1.8 Differenzierung & Wachstumshemmnisse](#18-differenzierung--wachstumshemmnisse)
-- [Kapitel 2: Digitale Außensicht & Sichtbarkeit](#kapitel-2-digitale-außensicht--sichtbarkeit)
-  - [2.1 Webseitenanalyse](#21-webseitenanalyse)
-  - [2.2 Digitale Sichtbarkeit (SISTRIX)](#22-digitale-sichtbarkeit-sistrix)
-  - [2.3 Wettbewerbsvergleich digital](#23-wettbewerbsvergleich-digital)
-  - [2.4 Demand Gaps & Quick Wins](#24-demand-gaps--quick-wins)
-- [Kapitel 3: Synthese & Gesprächsvorbereitung](#kapitel-3-synthese--gesprächsvorbereitung)
-  - [3.1 Analyse-Score](#31-analyse-score)
-  - [3.2 Priorisierte Problemfelder](#32-priorisierte-problemfelder)
-  - [3.3 Executive Summary & Einstiegsfragen](#33-executive-summary--einstiegsfragen)
+- [Kapitel 1: Unternehmen, Markt & Wettbewerb](#kapitel-1)
+- [Kapitel 2: Digitale Außensicht & Sichtbarkeit](#kapitel-2)
+- [Kapitel 3: Synthese & Gesprächsvorbereitung](#kapitel-3) *(folgt)*
 
 ---
 
-# Kapitel 1: Unternehmen, Markt & Wettbewerb
+# Kapitel 1: Unternehmen, Markt & Wettbewerb {#kapitel-1}
 
 ## 1.1 Unternehmensprofil
-
-| Feld | Inhalt |
-|------|--------|
-| **Firmenname** | |
-| **Website** | ${url} |
-| **Branche** | |
-| **Standort** | |
-| **Unternehmensgröße** | |
-| **Gründungsjahr** | |
-| **Vermuteter Anlass des Erstkontakts** | (Hypothese) |
-| **Vermutete Herausforderungen** | |
-| **Ansprechpartner** | |
-| **LinkedIn** | |
-
----
+Tabelle mit: Firmenname, Website (${url}), Branche, Standort, Unternehmensgröße, Gründungsjahr, vermuteter Anlass des Erstkontakts (Hypothese), vermutete Herausforderungen, Ansprechpartner, LinkedIn.
 
 ## 1.2 Positionierungsdiagnose
-
-[3–5 Sätze: Wie positioniert sich das Unternehmen? Erster Eindruck der Außendarstellung? Klar, differenziert, konsistent?]
-
----
+3–5 Sätze: Positionierung, Außendarstellung, Konsistenz, Stärken und Schwächen der Selbstdarstellung.
 
 ## 1.3 Angebot & Zielgruppen
-
-**Produkte / Leistungen:**
-
-**Welche Probleme werden gelöst?**
-
-**Wahrscheinliche Kernzielgruppe:**
-
-**Adressierte Kundengruppen:**
-
-**Spezifität der Zielgruppenansprache:** [hoch / mittel / niedrig] — Begründung:
-
----
+Leistungen, gelöste Probleme, Kernzielgruppe, adressierte Kundengruppen, Spezifität der Ansprache (hoch/mittel/niedrig + Begründung).
 
 ## 1.4 Marktanalyse
-
-**Marktgröße (Deutschland / DACH / Europa):**
-
-**Wachstumsrate (letzte 3 Jahre) und Prognose (nächste 3 Jahre):**
-
-**Wesentliche Wachstumstreiber:**
--
--
--
-
-**Dämpfende Faktoren:**
--
--
-
----
+Marktgröße DACH, Wachstumsrate letzte 3 Jahre + Prognose 3 Jahre, 3 Wachstumstreiber, 2 dämpfende Faktoren. (Hypothesen kennzeichnen)
 
 ## 1.5 Wettbewerbslandschaft
-
-**3–5 relevante Wettbewerber:**
-
-1. **[Name]** — Positionierung, Stärken, geschätzter Marktanteil
-2. **[Name]** — ...
-3. **[Name]** — ...
-
-**Aktuelle Wettbewerbsdynamiken:**
-
----
+3–5 konkrete Wettbewerber mit Positionierung, Stärken, Marktanteil (Hypothese). Wettbewerbsdynamik. SISTRIX-Sichtbarkeiten einbauen wo vorhanden.
 
 ## 1.6 Branchenstruktur & Trends
-
-**Kritische Stufen der Wertschöpfungskette:**
-
-**Konzentrationsgrad:** [fragmentiert / mittel / oligopolistisch]
-
-**Eintrittsbarrieren:**
-
-**5 wesentliche Branchentrends (nächste 5 Jahre):**
-1.
-2.
-3.
-4.
-5.
-
-**Technologische Disruption:**
-
----
+Wertschöpfungskette, Konzentrationsgrad, Eintrittsbarrieren, 5 Branchentrends nächste 5 Jahre, technologische Disruption.
 
 ## 1.7 Regulierung & Fördermittel
-
-**Relevante gesetzliche Anforderungen:**
-
-**Relevante Förderprogramme für dieses Unternehmen:**
-(BAFA, INQA, KfW, EU-Fonds — was käme konkret infrage?)
-
----
+Relevante Gesetze/Anforderungen. Konkrete Förderprogramme: BAFA, INQA (Unternehmenskultur, Personal & Kompetenz, Digitalisierung), KfW, EU — was kommt für dieses Unternehmen infrage?
 
 ## 1.8 Differenzierung & Wachstumshemmnisse
-
-**Differenzierungsgrad:** [Hoch / Mittel / Niedrig]
-
-**Wodurch unterscheidet sich das Unternehmen?**
-
-**Kommunikation:** [konkret / generisch — Begründung]
-
-**Die 3 größten erkennbaren Wachstumshemmnisse:**
-1.
-2.
-3.
-
-**Die 3 größten erkennbaren Chancen:**
-1.
-2.
-3.
+Differenzierungsgrad (hoch/mittel/niedrig), Unterscheidungsmerkmale, Kommunikationsqualität, die 3 größten Wachstumshemmnisse, die 3 größten Chancen.
 
 ---
 
-# Kapitel 2: Digitale Außensicht & Sichtbarkeit
+# Kapitel 2: Digitale Außensicht & Sichtbarkeit {#kapitel-2}
 
 ## 2.1 Webseitenanalyse
-
-**10-Sekunden-Test:** [Ja / Teilweise / Nein] — Begründung:
-
-**Stärken der Website:**
--
--
-
-**Lücken im Vergleich zu Best Practice:**
--
--
--
-
-**Call-to-Action-Qualität:** [klar / schwach / fehlend]
-
-**Sprachliche Qualität:** [konkret / generisch / Jargon-lastig]
-
----
+10-Sekunden-Test (ja/nein/teilweise + Begründung), Website-Stärken, Lücken vs. Best Practice, CTA-Qualität, Sprachqualität.
 
 ## 2.2 Digitale Sichtbarkeit (SISTRIX)
-
-> Arbeite ausschließlich mit den gelieferten SISTRIX-Zahlen — keine Erfindungen.
-
-**Sichtbarkeitsindex:** ${visStr}
-**Organische Klicks/Monat:** ${clicksStr}
-**Rankende Keywords:** ${kwStr}
-
-**Themen mit der höchsten Suchnachfrage:**
-(Leite aus Top-Seiten-URLs und Klick-Zahlen konkrete Suchthemen ab)
--
--
--
-
-**Strategische Einordnung:**
-[Was bedeutet diese Sichtbarkeitslage für das Unternehmen?]
-
----
+NUR mit diesen Zahlen arbeiten — keine Erfindungen:
+- Sichtbarkeitsindex: ${visStr}
+- Klicks/Monat: ${clicksStr}
+- Keywords: ${kwStr}
+Einordnung + strategische Bedeutung + Themen mit höchster Suchnachfrage (aus Top-Seiten ablesen).
 
 ## 2.3 Wettbewerbsvergleich digital
-
-${hasCompetitors
-  ? `> Basis: SISTRIX-Vergleich mit ${competitorData.length} Wettbewerbern.`
-  : `> Keine Wettbewerber-Sichtbarkeitsdaten verfügbar — allgemeine Brancheneinordnung.`}
-
-**Positionierung im digitalen Wettbewerb:**
-
-**Interpretation der Sichtbarkeitsunterschiede:**
-
-**Chancen:**
-1.
-2.
-
-**Risiken / Warnsignale:**
-1.
-2.
-
----
+${hasCompetitors ? `Basis: SISTRIX-Daten von ${competitorData.length} Wettbewerbern (aus den SISTRIX-Daten oben).` : 'Keine Wettbewerber-SISTRIX-Daten — allgemeine Brancheneinordnung.'}
+Positionierung im digitalen Wettbewerb, Interpretation der Unterschiede, 2 Chancen, 2 Risiken.
 
 ## 2.4 Demand Gaps & Quick Wins
+3 unbesetzte Nachfragebereiche, 3 priorisierte Quick Wins (sofort/kurzfristig/mittelfristig).`;
+}
 
-**Unbesetzte Nachfrage (keine systematische Bedienung durch Wettbewerber):**
-1.
-2.
-3.
+function buildPromptPart2(url, part1Text, crawlResult, sistrix, competitorData, extraMeta) {
+  const { metaBlock, content, sistrixBlock } = buildContext(url, crawlResult, sistrix, competitorData, extraMeta);
 
-**Konkrete Quick Wins — priorisiert:**
-1. **(sofort, 0–4 Wochen):**
-2. **(kurzfristig, 1–3 Monate):**
-3. **(mittelfristig, 3–6 Monate):**
+  return `Du hast soeben Kapitel 1 und 2 einer Strategieanalyse erstellt. Hier ist der bisherige Inhalt:
+
+${part1Text.slice(-6000)}
 
 ---
 
-# Kapitel 3: Synthese & Gesprächsvorbereitung
+Erstelle jetzt vollständig KAPITEL 3 (Synthese & Gesprächsvorbereitung) auf Basis dieser Analyse. Direkt, konkret, keine Füllsätze.
+
+---
+
+# Kapitel 3: Synthese & Gesprächsvorbereitung {#kapitel-3}
 
 ## 3.1 Analyse-Score
-
-| Dimension | Score | Begründung |
-|-----------|-------|------------|
-| Positionierungsklarheit | /10 | |
-| Zielgruppenklarheit | /10 | |
-| Angebotsklarheit | /10 | |
-| Differenzierung | /10 | |
-| Digitale Sichtbarkeit | /10 | |
-| Kommunikationsstärke | /10 | |
-| **Gesamteindruck** | **/10** | |
-
----
+Tabelle mit Score /10 und Begründung für: Positionierungsklarheit, Zielgruppenklarheit, Angebotsklarheit, Differenzierung, Digitale Sichtbarkeit, Kommunikationsstärke, Gesamteindruck.
 
 ## 3.2 Priorisierte Problemfelder
-
-**Kurzfristig (0–12 Monate) — akuter Handlungsbedarf:**
-- Symptome beim Mandanten:
-- Belege aus der Analyse:
-
-**Mittelfristig (1–3 Jahre) — strategische Lücken:**
-- Markt-/Wettbewerbsveränderungen ohne Reaktion:
-
-**Langfristig (3–7 Jahre) — strukturelle Herausforderungen:**
-- Disruptionspotenziale:
-
----
+**Kurzfristig (0–12 Monate):** Akuter Handlungsbedarf — Symptome beim Mandanten, Belege aus der Analyse.
+**Mittelfristig (1–3 Jahre):** Strategische Lücken, Markt-/Wettbewerbsveränderungen ohne Reaktion.
+**Langfristig (3–7 Jahre):** Strukturelle Herausforderungen, Disruptionspotenziale.
 
 ## 3.3 Executive Summary & Einstiegsfragen
-
-**Was ich wissen sollte (5 wichtigste Punkte):**
--
--
--
--
--
-
-**Was ich fragen würde (5 Einstiegsfragen als offene Hypothesen):**
--
--
--
--
--
-
----
-
-Fülle alle Abschnitte vollständig aus — keine Kürzungen.
-Kapitel 2.2/2.3: Nur mit gelieferten SISTRIX-Zahlen arbeiten, konkrete Zahlen nennen.
-Kapitel 1.4–1.6: Fundierte Hypothesen sind ausdrücklich erwünscht, bitte kennzeichnen.`;
+**5 wichtigste Punkte für das Erstgespräch** (kompakt, präzise).
+**5 Einstiegsfragen als offene Hypothesen** (konkret formuliert, Antwort provozierend).`;
 }
 
 export default async function handler(req, res) {
@@ -482,38 +298,71 @@ export default async function handler(req, res) {
     return res.status(422).json({ error: `Crawling fehlgeschlagen: ${e.message}` });
   }
 
-  const prompt = buildPrompt(targetUrl, crawlResult, sistrix, competitorData, extraMeta);
-
-  const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': anthropicKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'output-128k-2025-02-19',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 32000,
-      stream: true,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!anthropicResponse.ok) {
-    const err = await anthropicResponse.json().catch(() => ({}));
-    return res.status(anthropicResponse.status).json({ error: `Claude Fehler: ${err.error?.message || anthropicResponse.status}` });
-  }
-
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
 
-  const reader = anthropicResponse.body.getReader();
-  const decoder = new TextDecoder();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    res.write(decoder.decode(value, { stream: true }));
+  const anthropicHeaders = {
+    'Content-Type': 'application/json',
+    'x-api-key': anthropicKey,
+    'anthropic-version': '2023-06-01',
+  };
+
+  async function streamClaude(prompt, bufferOutput) {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: anthropicHeaders,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 8000,
+        stream: true,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(`Claude Fehler: ${err.error?.message || r.status}`);
+    }
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let collected = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      res.write(chunk);
+      if (bufferOutput) {
+        // Extract text from SSE for use as context in part 2
+        buffer += chunk;
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const event = JSON.parse(data);
+            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+              collected += event.delta.text;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+    return collected;
   }
+
+  try {
+    // Call 1: Kapitel 1 + 2
+    const prompt1 = buildPromptPart1(targetUrl, crawlResult, sistrix, competitorData, extraMeta);
+    const part1Text = await streamClaude(prompt1, true);
+
+    // Call 2: Kapitel 3 (with Kapitel 1+2 as context)
+    const prompt2 = buildPromptPart2(targetUrl, part1Text, crawlResult, sistrix, competitorData, extraMeta);
+    await streamClaude(prompt2, false);
+  } catch (e) {
+    res.write(`data: {"type":"error","error":{"message":"${e.message}"}}\n\n`);
+  }
+
   res.end();
 }
