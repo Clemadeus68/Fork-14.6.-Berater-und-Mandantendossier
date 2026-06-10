@@ -1,19 +1,26 @@
-// Node.js runtime — single Claude call, all 5 sections in one stream
-export const maxDuration = 300;
+export const config = { runtime: 'edge' };
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export default async function handler(req) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 200, headers: corsHeaders });
+  if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+    status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY nicht gesetzt' });
+  if (!anthropicKey) return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY nicht gesetzt' }), {
+    status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 
-  const { strategieanalyse, companyName, url } = req.body;
-  if (!strategieanalyse) return res.status(400).json({ error: 'strategieanalyse fehlt' });
+  const { strategieanalyse, companyName, url } = await req.json();
+  if (!strategieanalyse) return new Response(JSON.stringify({ error: 'strategieanalyse fehlt' }), {
+    status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 
   const today = new Date().toLocaleDateString('de-DE');
   const name = companyName || url || 'Mandant';
@@ -116,44 +123,34 @@ Was wäre zu früh, zu sensibel, oder könnte den Mandanten abschrecken?
 
 **Nächste Schritte nach dem Erstgespräch:** (2 Schritte)`;
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': anthropicKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 64000,
+      stream: true,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
 
-  const anthropicHeaders = {
-    'Content-Type': 'application/json',
-    'x-api-key': anthropicKey,
-    'anthropic-version': '2023-06-01',
-  };
-
-  async function streamClaude(p) {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: anthropicHeaders,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 64000,
-        stream: true,
-        messages: [{ role: 'user', content: p }],
-      }),
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    return new Response(JSON.stringify({ error: `Claude Fehler: ${err.error?.message || r.status}` }), {
+      status: r.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(`Claude Fehler: ${err.error?.message || r.status}`);
-    }
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(decoder.decode(value, { stream: true }));
-    }
   }
 
-  try {
-    await streamClaude(prompt);
-  } catch (e) {
-    res.write(`data: {"type":"error","error":{"message":"${e.message}"}}\n\n`);
-  }
-
-  res.end();
+  return new Response(r.body, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    },
+  });
 }
