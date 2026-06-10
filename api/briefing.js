@@ -1,4 +1,4 @@
-// Node.js runtime — two sequential Claude calls to stay within 8192 token limit
+// Node.js runtime — single Claude call, all 5 sections in one stream
 export const maxDuration = 300;
 
 export default async function handler(req, res) {
@@ -26,10 +26,10 @@ INQA-zertifiziert in: Unternehmenskultur & Führung | Personal & Kompetenz | Dig
 Das Briefing ist vertraulich, nur für dich. Sei direkt, pointiert, ehrlich. Kein Consulting-Sprech.
 Basis-Analyse:\n${analyseContext}`;
 
-  const promptPart1 = `${systemContext}
+  const prompt = `${systemContext}
 
 ---
-Erstelle TEIL 1 des Akquise-Briefings für ${name} (${today}).
+Erstelle das vollständige Akquise-Briefing für ${name} (${today}). Alle 5 Abschnitte in einem Durchgang.
 
 KOMPAKTFORMAT — PFLICHT: Stichpunkte statt Fließtext. Je Defizit max. 5 Zeilen. Je INQA-Thema max. 4 Bullets. Keine Einleitungssätze.
 
@@ -66,17 +66,9 @@ Für jedes Themenfeld 3 Bullets: Relevanz | Anknüpfung | Projektidee
 **Themenfeld 2: Personal & Kompetenz**
 **Themenfeld 3: Digitalisierung & Innovation**
 
-INQA-Gesamteignung: [sehr gut/gut/bedingt/gering] — 1 Satz Begründung.`;
-
-  const promptPart2 = (part1Text) => `${systemContext}
+INQA-Gesamteignung: [sehr gut/gut/bedingt/gering] — 1 Satz Begründung.
 
 ---
-Du hast soeben Teil 1 des Akquise-Briefings geschrieben. Abschluss:
-
-${part1Text.slice(-3000)}
-
----
-Schreibe jetzt TEIL 2 (Abschnitte 3–5). KOMPAKTFORMAT: Stichpunkte, kein Fließtext.
 
 ## 3. Beratungsleistungen — konkrete Ansatzpunkte
 
@@ -111,7 +103,7 @@ Schreibe jetzt TEIL 2 (Abschnitte 3–5). KOMPAKTFORMAT: Stichpunkte, kein Flie�
     'anthropic-version': '2023-06-01',
   };
 
-  async function streamClaude(prompt, bufferOutput) {
+  async function streamClaude(p) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: anthropicHeaders,
@@ -119,7 +111,7 @@ Schreibe jetzt TEIL 2 (Abschnitte 3–5). KOMPAKTFORMAT: Stichpunkte, kein Flie�
         model: 'claude-sonnet-4-6',
         max_tokens: 64000,
         stream: true,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: p }],
       }),
     });
     if (!r.ok) {
@@ -128,39 +120,15 @@ Schreibe jetzt TEIL 2 (Abschnitte 3–5). KOMPAKTFORMAT: Stichpunkte, kein Flie�
     }
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
-    let sseBuffer = '';
-    let collected = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      res.write(chunk);
-      if (bufferOutput) {
-        sseBuffer += chunk;
-        const lines = sseBuffer.split('\n');
-        sseBuffer = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const event = JSON.parse(data);
-            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-              collected += event.delta.text;
-            }
-          } catch (_) {}
-        }
-      }
+      res.write(decoder.decode(value, { stream: true }));
     }
-    return collected;
   }
 
   try {
-    // Part 1: Abschnitte 1 + 2 (Kerndefizite + INQA)
-    const part1Text = await streamClaude(promptPart1, true);
-
-    // Part 2: Abschnitte 3 + 4 + 5 (with Part 1 as context)
-    await streamClaude(promptPart2(part1Text), false);
+    await streamClaude(prompt);
   } catch (e) {
     res.write(`data: {"type":"error","error":{"message":"${e.message}"}}\n\n`);
   }

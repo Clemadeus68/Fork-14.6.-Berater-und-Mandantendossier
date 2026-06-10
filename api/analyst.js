@@ -1,4 +1,4 @@
-// Node.js runtime — longer timeout needed for Firecrawl + Claude 20k tokens
+// Node.js runtime — longer timeout needed for Firecrawl + Claude streaming
 export const maxDuration = 300;
 
 const SISTRIX_BASE = 'https://api.sistrix.com';
@@ -155,7 +155,7 @@ function buildContext(url, crawlResult, sistrix, competitorData, extraMeta) {
   return { metaBlock, content, sistrixBlock };
 }
 
-function buildPromptPart1(url, crawlResult, sistrix, competitorData, extraMeta) {
+function buildPrompt(url, crawlResult, sistrix, competitorData, extraMeta) {
   const { metaBlock, content, sistrixBlock } = buildContext(url, crawlResult, sistrix, competitorData, extraMeta);
   const today = new Date().toLocaleDateString('de-DE');
   const hasCompetitors = competitorData && competitorData.length > 0;
@@ -163,7 +163,7 @@ function buildPromptPart1(url, crawlResult, sistrix, competitorData, extraMeta) 
   const clicksStr = sistrix ? sistrix.totalClicks.toLocaleString('de-DE') : '—';
   const kwStr = sistrix ? sistrix.totalKeywords.toLocaleString('de-DE') : '—';
 
-  return `Du bist ein erfahrener Unternehmensberater. Du erstellst TEIL 1 einer Strategieanalyse (Kapitel 1 + 2).
+  return `Du bist ein erfahrener Unternehmensberater. Erstelle eine vollständige Strategieanalyse (alle 3 Kapitel in einem Durchgang).
 
 KOMPAKTFORMAT — PFLICHT: Tabellen und Stichpunkte statt Fließtext. Fließtext max. 2 Sätze pro Abschnitt. Jede Tabelle max. 8 Zeilen. Keine Wiederholungen. Keine Einleitungssätze.
 Hypothesen kennzeichnen mit "(H)".
@@ -182,7 +182,7 @@ ${content}
 ## Inhaltsverzeichnis
 - [Kapitel 1: Unternehmen, Markt & Wettbewerb](#kapitel-1)
 - [Kapitel 2: Digitale Außensicht & Sichtbarkeit](#kapitel-2)
-- [Kapitel 3: Synthese & Gesprächsvorbereitung](#kapitel-3) *(folgt)*
+- [Kapitel 3: Synthese & Gesprächsvorbereitung](#kapitel-3)
 
 ---
 
@@ -234,19 +234,9 @@ ${hasCompetitors ? `Basis: SISTRIX-Daten von ${competitorData.length} Wettbewerb
 Tabelle: Domain | Sichtbarkeit | Einordnung (max. 4 Zeilen). 2 Chancen + 2 Risiken als Bullets.
 
 ## 2.4 Demand Gaps & Quick Wins
-Demand Gaps: 3 Bullets. Quick Wins: 3 Bullets (sofort/kurzfristig/mittelfristig).`;
-}
-
-function buildPromptPart2(url, part1Text, crawlResult, sistrix, competitorData, extraMeta) {
-  const { metaBlock, content, sistrixBlock } = buildContext(url, crawlResult, sistrix, competitorData, extraMeta);
-
-  return `Du hast soeben Kapitel 1 und 2 einer Strategieanalyse erstellt. Hier ist der Abschluss:
-
-${part1Text.slice(-4000)}
+Demand Gaps: 3 Bullets. Quick Wins: 3 Bullets (sofort/kurzfristig/mittelfristig).
 
 ---
-
-Erstelle jetzt KAPITEL 3. KOMPAKTFORMAT: Tabellen und Stichpunkte, kein Fließtext.
 
 # Kapitel 3: Synthese & Gesprächsvorbereitung {#kapitel-3}
 
@@ -308,7 +298,7 @@ export default async function handler(req, res) {
     'anthropic-version': '2023-06-01',
   };
 
-  async function streamClaude(prompt, bufferOutput) {
+  async function streamClaude(prompt) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: anthropicHeaders,
@@ -325,42 +315,16 @@ export default async function handler(req, res) {
     }
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
-    let collected = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      res.write(chunk);
-      if (bufferOutput) {
-        // Extract text from SSE for use as context in part 2
-        buffer += chunk;
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const event = JSON.parse(data);
-            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-              collected += event.delta.text;
-            }
-          } catch (_) {}
-        }
-      }
+      res.write(decoder.decode(value, { stream: true }));
     }
-    return collected;
   }
 
   try {
-    // Call 1: Kapitel 1 + 2
-    const prompt1 = buildPromptPart1(targetUrl, crawlResult, sistrix, competitorData, extraMeta);
-    const part1Text = await streamClaude(prompt1, true);
-
-    // Call 2: Kapitel 3 (with Kapitel 1+2 as context)
-    const prompt2 = buildPromptPart2(targetUrl, part1Text, crawlResult, sistrix, competitorData, extraMeta);
-    await streamClaude(prompt2, false);
+    const prompt = buildPrompt(targetUrl, crawlResult, sistrix, competitorData, extraMeta);
+    await streamClaude(prompt);
   } catch (e) {
     res.write(`data: {"type":"error","error":{"message":"${e.message}"}}\n\n`);
   }
