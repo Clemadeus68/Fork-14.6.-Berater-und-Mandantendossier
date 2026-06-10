@@ -112,10 +112,11 @@ export default async function handler(req) {
     };
   });
 
-  // Debug: collect rejected reasons
+  // Debug: collect rejected reasons + raw values
   const debugErrors = [];
   allDomains.forEach((d, i) => {
     if (visResults[i].status === 'rejected') debugErrors.push(`vis[${d}]: ${visResults[i].reason}`);
+    else debugErrors.push(`vis[${d}] raw: ${JSON.stringify(visResults[i].value).slice(0, 200)}`);
   });
   top10.forEach((d, i) => {
     if (trafficResults[i].status === 'rejected') debugErrors.push(`traffic[${d}]: ${trafficResults[i].reason}`);
