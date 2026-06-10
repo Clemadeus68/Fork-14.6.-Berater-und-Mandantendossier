@@ -236,8 +236,9 @@ export default function Analyst() {
         }),
       });
       if (!response.ok || response.headers.get("Content-Type")?.includes("application/json")) {
-        const data = await response.json();
-        setErr(data.error || `Fehler ${response.status}`);
+        let msg = `Fehler ${response.status}`;
+        try { const d = await response.json(); msg = d.error || msg; } catch { try { msg = await response.text() || msg; } catch {} }
+        setErr(msg);
         updatePhase("Website wird gecrawlt — Strategieanalyse wird erstellt…", "error");
       } else {
         let accumulated = "";

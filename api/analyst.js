@@ -1,4 +1,5 @@
-export const config = { runtime: 'edge' };
+// Node.js runtime — longer timeout needed for Firecrawl + Claude 20k tokens
+export const maxDuration = 300;
 
 const SISTRIX_BASE = 'https://api.sistrix.com';
 
@@ -446,36 +447,22 @@ Kapitel 2.2/2.3: Nur mit gelieferten SISTRIX-Zahlen arbeiten, konkrete Zahlen ne
 Kapitel 1.4–1.6: Fundierte Hypothesen sind ausdrücklich erwünscht, bitte kennzeichnen.`;
 }
 
-export default async function handler(req) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 200, headers: corsHeaders });
-  }
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const firecrawlKey = process.env.FIRECRAWL_API_KEY;
 
-  if (!anthropicKey) return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY nicht gesetzt' }), {
-    status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
-  if (!firecrawlKey) return new Response(JSON.stringify({ error: 'FIRECRAWL_API_KEY nicht gesetzt' }), {
-    status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+  if (!anthropicKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY nicht gesetzt' });
+  if (!firecrawlKey) return res.status(500).json({ error: 'FIRECRAWL_API_KEY nicht gesetzt' });
 
-  const { url, competitorData = [], extraMeta = {} } = await req.json();
-  if (!url) return new Response(JSON.stringify({ error: 'URL fehlt' }), {
-    status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+  const { url, competitorData = [], extraMeta = {} } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL fehlt' });
 
   const targetUrl = url.startsWith('http') ? url : 'https://' + url;
   const sistrixKey = process.env.SISTRIX_API_KEY;
@@ -492,9 +479,7 @@ export default async function handler(req) {
     crawlResult = crawl.value;
     if (sist.status === 'fulfilled') sistrix = sist.value;
   } catch (e) {
-    return new Response(JSON.stringify({ error: `Crawling fehlgeschlagen: ${e.message}` }), {
-      status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return res.status(422).json({ error: `Crawling fehlgeschlagen: ${e.message}` });
   }
 
   const prompt = buildPrompt(targetUrl, crawlResult, sistrix, competitorData, extraMeta);
@@ -516,17 +501,18 @@ export default async function handler(req) {
 
   if (!anthropicResponse.ok) {
     const err = await anthropicResponse.json().catch(() => ({}));
-    return new Response(JSON.stringify({ error: `Claude Fehler: ${err.error?.message || anthropicResponse.status}` }), {
-      status: anthropicResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return res.status(anthropicResponse.status).json({ error: `Claude Fehler: ${err.error?.message || anthropicResponse.status}` });
   }
 
-  return new Response(anthropicResponse.body, {
-    status: 200,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-    },
-  });
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+
+  const reader = anthropicResponse.body.getReader();
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    res.write(decoder.decode(value, { stream: true }));
+  }
+  res.end();
 }
