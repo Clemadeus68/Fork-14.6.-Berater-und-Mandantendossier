@@ -1,5 +1,5 @@
 # Projektstatus: mandatsstart-unified-analyst
-*Zuletzt aktualisiert: 10.06.2026 (Commit 93940a4)*
+*Zuletzt aktualisiert: 10.06.2026 (Commit 5aced75)*
 
 ---
 
@@ -39,7 +39,7 @@ Ein strategisches Analyse-Tool für Clemens Gutmann (be nice Managementberatung)
 5. Risikoeinschätzung & Qualifizierung
 
 ### Export
-Beide Dokumente: **MD** + **PDF** (Print-Dialog) + **Word (.docx)**
+Beide Dokumente: **MD** + **PDF** (Browser-Druckdialog) + **Word (.docx)**
 Außerdem: In Zwischenablage kopieren, Blob-Speicherung mit Share-Link, localStorage-History
 
 ---
@@ -48,24 +48,24 @@ Außerdem: In Zwischenablage kopieren, Blob-Speicherung mit Share-Link, localSto
 
 - **Frontend:** React 18 + Vite → `/frontend/src/`
 - **Backend:** Node.js Serverless Functions (Vercel) → `/api/`
-- **KI:** Claude claude-sonnet-4-5 (Anthropic API, SSE-Streaming)
+- **KI:** `claude-sonnet-4-6` (Anthropic API, SSE-Streaming, max_tokens: 64000)
 - **SEO-Daten:** SISTRIX API
 - **Crawling:** Firecrawl API
 - **Speicherung:** Vercel Blob (private store)
-- **Word-Export:** `docx` npm package
+- **Word-Export:** `docx` npm package + `jspdf` (installiert, derzeit nicht aktiv genutzt)
 - **Styling:** be-nice CI (G=#8CC63E, DG=#454544, T=#33AB97, BT=#13A1B6, Calibri)
 
 ---
 
 ## Wichtige Architektur-Entscheidung: Two-Call-Pattern
 
-**Problem:** `claude-sonnet-4-5` hat ein hartes Output-Limit von 8192 Tokens.
-**Lösung:** Beide API-Endpoints (`analyst.js`, `briefing.js`) nutzen **zwei sequenzielle Claude-Calls**, die als ein kontinuierlicher Stream an den Client weitergeleitet werden:
+**Grund:** Beide API-Endpoints (`analyst.js`, `briefing.js`) nutzen **zwei sequenzielle Claude-Calls**, die als ein kontinuierlicher SSE-Stream an den Client weitergeleitet werden:
 
 - `analyst.js`: Call 1 → Kapitel 1+2 | Call 2 → Kapitel 3 (mit Kap 1+2 als Kontext)
 - `briefing.js`: Call 1 → Abschnitte 1+2 | Call 2 → Abschnitte 3-5 (mit Teil 1 als Kontext)
 
 Der Client merkt nichts davon — der Stream läuft durch. Teil 1 wird gebuffert und als Kontext an Call 2 übergeben.
+`max_tokens: 64000` pro Call (volles Limit von claude-sonnet-4-6).
 
 ---
 
@@ -82,17 +82,18 @@ api/
   sistrix.js        — SISTRIX-Daten-Endpoint (Edge runtime)
                       Lädt Visibility + Traffic für Haupt-Domain + bis zu 9 Wettbewerber
   competitors.js    — Wettbewerber-Identifikation (Claude-basiert)
-  save-result.js    — Speichert Ergebnis in Vercel Blob
+  save-result.js    — Speichert Ergebnis in Vercel Blob (inkl. briefing-Feld)
   load-result.js    — Lädt Ergebnis aus Vercel Blob (via ?r=ID)
 
 frontend/src/
   App.jsx           — Minimaler Wrapper: Header + <Analyst /> (kein Tab-Selektor mehr)
   Analyst.jsx       — Hauptkomponente: Input-Card + SISTRIX-Charts + 2 Dokument-Karten
   ExternalIntelligence.jsx — SISTRIX-Visualisierungen (unverändert)
-  PrintExport.js    — exportToPDF() + exportToWord() (docx-Package)
+  PrintExport.js    — exportToPDF() (Browser-Print) + exportToWord() (docx-Package)
 
 frontend/
-  package.json      — Dependencies inkl. docx ^8.5.0
+  package.json      — Dependencies inkl. docx ^8.5.0, jspdf ^2.5.2
+  public/logo.png   — be-nice Logo (1759×955px RGBA) — eingebettet in PDF + Word
 ```
 
 ---
@@ -110,13 +111,38 @@ frontend/
 
 ---
 
-## Bekannte offene Punkte / mögliche nächste Aufgaben
+## Bekannte offene Punkte / nächste Aufgaben
 
-1. **Testen ob Two-Call-Output jetzt vollständig ist** — war der Stand beim letzten Test noch nicht abgeschlossen (letzter Commit `9587d86` hat max_tokens nochmals angepasst)
-2. **PDF-Qualität** — ✅ Hinweis auf Kopf-/Fußzeilen-Deaktivierung verbessert; TOC jetzt CSS-basiert aus Claude-Output
-3. **Word-Export (.docx)** — ✅ Header/Footer/Seitenzahlen eingebaut; **noch nicht live getestet**
-4. **Save/Load** — ✅ Briefing wird jetzt gespeichert (`save-result.js` fix, Commit `93940a4`)
-5. **Ladezeit** — Two-Call-Analyse dauert ~2-4 Minuten; kein Timeout-Problem, aber UI-Feedback könnte detaillierter sein
+1. **Texte noch abgeschnitten?** — max_tokens auf 64000 erhöht (Commit `bf0438a`), aber noch nicht live bestätigt dass alle 3 Kapitel / 5 Abschnitte vollständig sind. **Priorität: als erstes testen.**
+
+2. **PDF-Footer** — Browser zeigt jetzt App-URL statt `about:blank` (via `history.replaceState`). Entscheiden: App-URL im Footer akzeptieren, oder einmalig „Kopf- und Fußzeilen" im Druckdialog deaktivieren (Chrome merkt sich das pro Domain).
+
+3. **PDF-Qualität allgemein** — be-nice CI angewendet (H2 türkis, Logo im Kopf). Noch nicht live getestet ob Layout jetzt passt. Ggf. weitere Anpassungen nötig.
+
+4. **Word-Export (.docx)** — be-nice CI angewendet: Logo im Header, H1 size 40/border 40, Titelblock size 48, Footer „Seite N / M", Tabellen FIXED-Layout. Noch nicht live bestätigt.
+
+5. **docx TOC Links** — InternalHyperlink + Bookmark auf Überschriften eingebaut. Noch nicht live getestet ob Links im Word-Dokument funktionieren.
+
+6. **GH_TOKEN / Claude Code Auth-Banner** — `~/.zprofile` liest Token aus macOS Keychain: `export GH_TOKEN=$(security find-internet-password -s github.com -a Clemadeus68 -w 2>/dev/null)`. Nach Shell-Neustart wirksam.
+
+---
+
+## be-nice CI — wichtigste Werte für Dokument-Export
+
+| Element | Wert |
+|---|---|
+| Grün | `#8CC63E` / `8CC63E` |
+| Dunkelgrau | `#454544` / `454544` |
+| Türkis | `#33AB97` / `33AB97` |
+| Blau-Türkis | `#13A1B6` / `13A1B6` |
+| Hellgrau | `#E9E9E9` / `E9E9E9` |
+| Mittelgrau | `#777777` / `777777` |
+| Schrift | Calibri durchgehend |
+| H1 (Word) | size 40, border-bottom grün size 40 |
+| H2 (Word) | size 24, Türkis |
+| H2 (PDF) | color #33AB97 |
+| Titelblock (Word) | size 48 |
+| Logo | `frontend/public/logo.png`, 1759×955px |
 
 ---
 
@@ -129,12 +155,12 @@ frontend/
 ## Commit-History (letzte 10)
 
 ```
+5aced75 revert: PDF zurück zu Browser-Print; about:blank via history.replaceState gefixt
+bf0438a fix: max_tokens 32000→64000 (volles Limit von claude-sonnet-4-6)
+b0b1ff6 fix: be-nice CI in PDF und Word durchsetzen
+9208f57 feat: PDF via jsPDF (kein about:blank), docx TOC-Links, Tabellenbreite
+9006195 fix: upgrade model to claude-sonnet-4-6 (64k output limit)
+8cc0319 chore: STATUS.md offene Punkte aktualisiert
+93940a4 feat: Word-Export mit Header/Footer/Seitenzahlen; briefing in Save/Load; PDF-Verbesserungen
 9587d86 fix: max_tokens 8000→16000 (claude-sonnet-4-5 native limit)
-cb3ae27 UI/PDF fixes: title rename, TOC links, footer, briefing header  
-1d8db46 fix: split briefing into two sequential Claude calls (8k tokens each)
-ad866c7 fix: split analysis into two sequential Claude calls (8k tokens each)
-5172316 fix: extend output tokens — beta header + 32k/16k limits
-76392b7 fix: handle SISTRIX status:error (403), remove debug logging
-c3cf364 Fix: switch analyst.js from Edge to Node.js runtime (maxDuration=300s)
-64a6462 Unified 1-tab analyst: 3-chapter Strategieanalyse + Akquise-Briefing + Word export
 ```
