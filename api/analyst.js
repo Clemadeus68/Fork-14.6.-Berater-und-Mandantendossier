@@ -163,9 +163,10 @@ function buildPromptPart1(url, crawlResult, sistrix, competitorData, extraMeta) 
   const clicksStr = sistrix ? sistrix.totalClicks.toLocaleString('de-DE') : '—';
   const kwStr = sistrix ? sistrix.totalKeywords.toLocaleString('de-DE') : '—';
 
-  return `Du bist ein erfahrener Unternehmensberater. Du erstellst TEIL 1 einer Strategieanalyse (Kapitel 1 + 2) für das erste Beratungsgespräch.
+  return `Du bist ein erfahrener Unternehmensberater. Du erstellst TEIL 1 einer Strategieanalyse (Kapitel 1 + 2).
 
-Schreibe direkt, konkret, hypothesenstark. Kennzeichne Annahmen mit "(Hypothese)". Keine Füllsätze.
+KOMPAKTFORMAT — PFLICHT: Tabellen und Stichpunkte statt Fließtext. Fließtext max. 2 Sätze pro Abschnitt. Jede Tabelle max. 8 Zeilen. Keine Wiederholungen. Keine Einleitungssätze.
+Hypothesen kennzeichnen mit "(H)".
 
 WEBSITE: ${url}
 META-DATEN: ${metaBlock || '(keine)'}
@@ -174,8 +175,6 @@ WEBSITE-INHALT (erste 12.000 Zeichen):
 ${content}
 
 ---
-
-Schreibe jetzt vollständig und ohne Kürzungen:
 
 # Strategieanalyse: [Firmenname]
 *Erstellt am: ${today} | Quelle: ${url}*
@@ -190,77 +189,79 @@ Schreibe jetzt vollständig und ohne Kürzungen:
 # Kapitel 1: Unternehmen, Markt & Wettbewerb {#kapitel-1}
 
 ## 1.1 Unternehmensprofil
-Tabelle mit: Firmenname, Website (${url}), Branche, Standort, Unternehmensgröße, Gründungsjahr, vermuteter Anlass des Erstkontakts (Hypothese), vermutete Herausforderungen, Ansprechpartner, LinkedIn.
+Tabelle: Firmenname | Website (${url}) | Branche | Standort | Größe | Gründungsjahr | Ansprechpartner | LinkedIn | Anlass Erstkontakt (H) | Vermutete Herausforderungen (H)
 
 ## 1.2 Positionierungsdiagnose
-3–5 Sätze: Positionierung, Außendarstellung, Konsistenz, Stärken und Schwächen der Selbstdarstellung.
+3 Stichpunkte: Positionierung, stärkstes USP, größte Kommunikationslücke.
 
 ## 1.3 Angebot & Zielgruppen
-Leistungen, gelöste Probleme, Kernzielgruppe, adressierte Kundengruppen, Spezifität der Ansprache (hoch/mittel/niedrig + Begründung).
+Tabelle Leistungen (3 Spalten: Leistung | Zielgruppe | Gelöstes Problem), max. 5 Zeilen.
+Dann 2 Stichpunkte: Kernzielgruppe + Spezifität der Ansprache (hoch/mittel/niedrig + 1 Satz).
 
 ## 1.4 Marktanalyse
-Marktgröße DACH, Wachstumsrate letzte 3 Jahre + Prognose 3 Jahre, 3 Wachstumstreiber, 2 dämpfende Faktoren. (Hypothesen kennzeichnen)
+Tabelle (4 Zeilen): Marktgröße DACH | Wachstum letzte 3 J. | Prognose 3 J. | Quelle/H
+Wachstumstreiber: 3 Bullets. Dämpfende Faktoren: 2 Bullets.
 
 ## 1.5 Wettbewerbslandschaft
-3–5 konkrete Wettbewerber mit Positionierung, Stärken, Marktanteil (Hypothese). Wettbewerbsdynamik. SISTRIX-Sichtbarkeiten einbauen wo vorhanden.
+Tabelle (max. 4 Konkurrenten): Wettbewerber | Positionierung | SISTRIX-Sichtbarkeit | Stärke
+2 Sätze Wettbewerbsdynamik.
 
 ## 1.6 Branchenstruktur & Trends
-Wertschöpfungskette, Konzentrationsgrad, Eintrittsbarrieren, 5 Branchentrends nächste 5 Jahre, technologische Disruption.
+5 Trends als Bullets: Trend | Zeithorizont | Relevanz für Mandanten.
 
 ## 1.7 Regulierung & Fördermittel
-Relevante Gesetze/Anforderungen. Konkrete Förderprogramme: BAFA, INQA (Unternehmenskultur, Personal & Kompetenz, Digitalisierung), KfW, EU — was kommt für dieses Unternehmen infrage?
+Tabelle (max. 5 Zeilen): Programm | Relevanz | Förderart/Betrag
 
 ## 1.8 Differenzierung & Wachstumshemmnisse
-Differenzierungsgrad (hoch/mittel/niedrig), Unterscheidungsmerkmale, Kommunikationsqualität, die 3 größten Wachstumshemmnisse, die 3 größten Chancen.
+Top-3-Hemmnisse: 3 Bullets. Top-3-Chancen: 3 Bullets.
 
 ---
 
 # Kapitel 2: Digitale Außensicht & Sichtbarkeit {#kapitel-2}
 
 ## 2.1 Webseitenanalyse
-10-Sekunden-Test (ja/nein/teilweise + Begründung), Website-Stärken, Lücken vs. Best Practice, CTA-Qualität, Sprachqualität.
+5 Bullets: 10-Sek.-Test (ja/nein/teilweise) | Stärken | Lücken | CTA-Qualität | Sprachqualität
 
 ## 2.2 Digitale Sichtbarkeit (SISTRIX)
-NUR mit diesen Zahlen arbeiten — keine Erfindungen:
+NUR diese Zahlen — keine Erfindungen:
 - Sichtbarkeitsindex: ${visStr}
 - Klicks/Monat: ${clicksStr}
 - Keywords: ${kwStr}
-Einordnung + strategische Bedeutung + Themen mit höchster Suchnachfrage (aus Top-Seiten ablesen).
+Tabelle: Metrik | Wert | Einordnung | Strategische Bedeutung (3 Zeilen).
 
 ## 2.3 Wettbewerbsvergleich digital
-${hasCompetitors ? `Basis: SISTRIX-Daten von ${competitorData.length} Wettbewerbern (aus den SISTRIX-Daten oben).` : 'Keine Wettbewerber-SISTRIX-Daten — allgemeine Brancheneinordnung.'}
-Positionierung im digitalen Wettbewerb, Interpretation der Unterschiede, 2 Chancen, 2 Risiken.
+${hasCompetitors ? `Basis: SISTRIX-Daten von ${competitorData.length} Wettbewerbern.` : 'Keine Wettbewerber-SISTRIX-Daten — Brancheneinordnung.'}
+Tabelle: Domain | Sichtbarkeit | Einordnung (max. 4 Zeilen). 2 Chancen + 2 Risiken als Bullets.
 
 ## 2.4 Demand Gaps & Quick Wins
-3 unbesetzte Nachfragebereiche, 3 priorisierte Quick Wins (sofort/kurzfristig/mittelfristig).`;
+Demand Gaps: 3 Bullets. Quick Wins: 3 Bullets (sofort/kurzfristig/mittelfristig).`;
 }
 
 function buildPromptPart2(url, part1Text, crawlResult, sistrix, competitorData, extraMeta) {
   const { metaBlock, content, sistrixBlock } = buildContext(url, crawlResult, sistrix, competitorData, extraMeta);
 
-  return `Du hast soeben Kapitel 1 und 2 einer Strategieanalyse erstellt. Hier ist der bisherige Inhalt:
+  return `Du hast soeben Kapitel 1 und 2 einer Strategieanalyse erstellt. Hier ist der Abschluss:
 
-${part1Text.slice(-6000)}
-
----
-
-Erstelle jetzt vollständig KAPITEL 3 (Synthese & Gesprächsvorbereitung) auf Basis dieser Analyse. Direkt, konkret, keine Füllsätze.
+${part1Text.slice(-4000)}
 
 ---
+
+Erstelle jetzt KAPITEL 3. KOMPAKTFORMAT: Tabellen und Stichpunkte, kein Fließtext.
 
 # Kapitel 3: Synthese & Gesprächsvorbereitung {#kapitel-3}
 
 ## 3.1 Analyse-Score
-Tabelle mit Score /10 und Begründung für: Positionierungsklarheit, Zielgruppenklarheit, Angebotsklarheit, Differenzierung, Digitale Sichtbarkeit, Kommunikationsstärke, Gesamteindruck.
+Tabelle: Kriterium | Score /10 | 1-Satz-Begründung
+Kriterien: Positionierungsklarheit | Zielgruppenklarheit | Angebotsklarheit | Differenzierung | Digitale Sichtbarkeit | Kommunikationsstärke | Gesamteindruck
 
 ## 3.2 Priorisierte Problemfelder
-**Kurzfristig (0–12 Monate):** Akuter Handlungsbedarf — Symptome beim Mandanten, Belege aus der Analyse.
-**Mittelfristig (1–3 Jahre):** Strategische Lücken, Markt-/Wettbewerbsveränderungen ohne Reaktion.
-**Langfristig (3–7 Jahre):** Strukturelle Herausforderungen, Disruptionspotenziale.
+**Kurzfristig (0–12 M):** 3 Bullets (Symptom + Beleg aus Analyse)
+**Mittelfristig (1–3 J):** 2 Bullets (strategische Lücke)
+**Langfristig (3–7 J):** 2 Bullets (strukturell/Disruption)
 
 ## 3.3 Executive Summary & Einstiegsfragen
-**5 wichtigste Punkte für das Erstgespräch** (kompakt, präzise).
-**5 Einstiegsfragen als offene Hypothesen** (konkret formuliert, Antwort provozierend).`;
+**Die 5 wichtigsten Punkte:** 5 Bullets, je max. 1 Satz.
+**5 Einstiegsfragen:** Nummerierte Liste, je 1 Satz.`;
 }
 
 export default async function handler(req, res) {
