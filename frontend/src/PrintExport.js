@@ -230,68 +230,15 @@ export async function exportToPDF({ chartCardRef, report, url, companyName, titl
   const reportHtml = parseMarkdown(report || '');
   const html = buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title });
 
-  // Render HTML in a hidden iframe so jsPDF can access the DOM
-  const frame = document.createElement('iframe');
-  frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;';
-  document.body.appendChild(frame);
-  frame.contentDocument.open();
-  frame.contentDocument.write(html);
-  frame.contentDocument.close();
-
-  // Remove body padding — jsPDF margin handles spacing
-  frame.contentDocument.body.style.padding = '0';
-
-  // Wait for fonts and images to render
-  await new Promise(r => setTimeout(r, 1000));
-
-  // Expand iframe to full content height so html2canvas captures everything
-  const fullH = frame.contentDocument.body.scrollHeight;
-  frame.style.height = (fullH + 50) + 'px';
-  await new Promise(r => setTimeout(r, 200));
-
-  const { jsPDF } = await import('jspdf');
-
-  const docTitle = title || 'Strategieanalyse';
-  const safeName = (companyName || url || 'dokument')
-    .replace(/https?:\/\/[^/]*\/?/, '')
-    .replace(/[^a-z0-9]/gi, '_')
-    .replace(/_+/g, '_')
-    .toLowerCase()
-    .slice(0, 35) || 'dokument';
-
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
-
-  await new Promise((resolve) => {
-    pdf.html(frame.contentDocument.body, {
-      callback(doc) {
-        // Add "Seite X / Y" bottom right on every page
-        const pages = doc.internal.getNumberOfPages();
-        for (let p = 1; p <= pages; p++) {
-          doc.setPage(p);
-          doc.setFontSize(8);
-          doc.setTextColor(119, 119, 119);
-          const W = doc.internal.pageSize.getWidth();
-          const H = doc.internal.pageSize.getHeight();
-          doc.text(`${p} / ${pages}`, W - 15, H - 8, { align: 'right' });
-        }
-        doc.save(`${docTitle}_${safeName}.pdf`);
-        document.body.removeChild(frame);
-        resolve();
-      },
-      margin: [20, 15, 25, 15],  // top, left, bottom (25mm reserve für Seitenzahl), right
-      autoPaging: 'text',
-      x: 0,
-      y: 0,
-      width: 180,        // Inhalt-Breite in mm (210 − 15 − 15)
-      windowWidth: 794,  // Breite des iframe in px
-      html2canvas: {
-        scale: 1.5,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      },
-    });
-  });
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { alert('Bitte Popup-Blocker deaktivieren für PDF-Export.'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  // URL von about:blank auf App-URL umsetzen → kein "about:blank" im Browser-Footer
+  try { win.history.replaceState({}, '', '/'); } catch (_) {}
+  win.focus();
+  setTimeout(() => win.print(), 700);
 }
 
 // ── Word Export (.docx) ────────────────────────────────────────────────────────
