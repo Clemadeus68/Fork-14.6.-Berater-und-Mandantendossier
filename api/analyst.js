@@ -163,10 +163,9 @@ function buildPrompt(url, crawlResult, sistrix, competitorData, extraMeta) {
   const clicksStr = sistrix ? sistrix.totalClicks.toLocaleString('de-DE') : '—';
   const kwStr = sistrix ? sistrix.totalKeywords.toLocaleString('de-DE') : '—';
 
-  return `Du bist ein erfahrener Unternehmensberater. Erstelle eine vollständige Strategieanalyse (alle 3 Kapitel in einem Durchgang).
+  return `Du bist ein erfahrener Unternehmensberater. Erstelle eine vollständige Strategieanalyse (alle 3 Kapitel in einem Durchgang) für das erste Beratungsgespräch.
 
-KOMPAKTFORMAT — PFLICHT: Tabellen und Stichpunkte statt Fließtext. Fließtext max. 2 Sätze pro Abschnitt. Jede Tabelle max. 8 Zeilen. Keine Wiederholungen. Keine Einleitungssätze.
-Hypothesen kennzeichnen mit "(H)".
+Schreibe direkt, konkret, hypothesenstark. Kennzeichne Annahmen mit "(Hypothese)". Keine Füllsätze.
 
 WEBSITE: ${url}
 META-DATEN: ${metaBlock || '(keine)'}
@@ -175,6 +174,8 @@ WEBSITE-INHALT (erste 12.000 Zeichen):
 ${content}
 
 ---
+
+Schreibe jetzt vollständig und ohne Kürzungen:
 
 # Strategieanalyse: [Firmenname]
 *Erstellt am: ${today} | Quelle: ${url}*
@@ -189,69 +190,65 @@ ${content}
 # Kapitel 1: Unternehmen, Markt & Wettbewerb {#kapitel-1}
 
 ## 1.1 Unternehmensprofil
-Tabelle: Firmenname | Website (${url}) | Branche | Standort | Größe | Gründungsjahr | Ansprechpartner | LinkedIn | Anlass Erstkontakt (H) | Vermutete Herausforderungen (H)
+Tabelle mit: Firmenname, Website (${url}), Branche, Standort, Unternehmensgröße, Gründungsjahr, vermuteter Anlass des Erstkontakts (Hypothese), vermutete Herausforderungen, Ansprechpartner, LinkedIn.
 
 ## 1.2 Positionierungsdiagnose
-3 Stichpunkte: Positionierung, stärkstes USP, größte Kommunikationslücke.
+3–5 Sätze: Positionierung, Außendarstellung, Konsistenz, Stärken und Schwächen der Selbstdarstellung.
 
 ## 1.3 Angebot & Zielgruppen
-Tabelle Leistungen (3 Spalten: Leistung | Zielgruppe | Gelöstes Problem), max. 5 Zeilen.
-Dann 2 Stichpunkte: Kernzielgruppe + Spezifität der Ansprache (hoch/mittel/niedrig + 1 Satz).
+Leistungen, gelöste Probleme, Kernzielgruppe, adressierte Kundengruppen, Spezifität der Ansprache (hoch/mittel/niedrig + Begründung).
 
 ## 1.4 Marktanalyse
-Tabelle (4 Zeilen): Marktgröße DACH | Wachstum letzte 3 J. | Prognose 3 J. | Quelle/H
-Wachstumstreiber: 3 Bullets. Dämpfende Faktoren: 2 Bullets.
+Marktgröße DACH, Wachstumsrate letzte 3 Jahre + Prognose 3 Jahre, 3 Wachstumstreiber, 2 dämpfende Faktoren. (Hypothesen kennzeichnen)
 
 ## 1.5 Wettbewerbslandschaft
-Tabelle (max. 4 Konkurrenten): Wettbewerber | Positionierung | SISTRIX-Sichtbarkeit | Stärke
-2 Sätze Wettbewerbsdynamik.
+3–5 konkrete Wettbewerber mit Positionierung, Stärken, Marktanteil (Hypothese). Wettbewerbsdynamik. SISTRIX-Sichtbarkeiten einbauen wo vorhanden.
 
 ## 1.6 Branchenstruktur & Trends
-5 Trends als Bullets: Trend | Zeithorizont | Relevanz für Mandanten.
+Wertschöpfungskette, Konzentrationsgrad, Eintrittsbarrieren, 5 Branchentrends nächste 5 Jahre, technologische Disruption.
 
 ## 1.7 Regulierung & Fördermittel
-Tabelle (max. 5 Zeilen): Programm | Relevanz | Förderart/Betrag
+Relevante Gesetze/Anforderungen. Konkrete Förderprogramme: BAFA, INQA (Unternehmenskultur, Personal & Kompetenz, Digitalisierung), KfW, EU — was kommt für dieses Unternehmen infrage?
 
 ## 1.8 Differenzierung & Wachstumshemmnisse
-Top-3-Hemmnisse: 3 Bullets. Top-3-Chancen: 3 Bullets.
+Differenzierungsgrad (hoch/mittel/niedrig), Unterscheidungsmerkmale, Kommunikationsqualität, die 3 größten Wachstumshemmnisse, die 3 größten Chancen.
 
 ---
 
 # Kapitel 2: Digitale Außensicht & Sichtbarkeit {#kapitel-2}
 
 ## 2.1 Webseitenanalyse
-5 Bullets: 10-Sek.-Test (ja/nein/teilweise) | Stärken | Lücken | CTA-Qualität | Sprachqualität
+10-Sekunden-Test (ja/nein/teilweise + Begründung), Website-Stärken, Lücken vs. Best Practice, CTA-Qualität, Sprachqualität.
 
 ## 2.2 Digitale Sichtbarkeit (SISTRIX)
-NUR diese Zahlen — keine Erfindungen:
+NUR mit diesen Zahlen arbeiten — keine Erfindungen:
 - Sichtbarkeitsindex: ${visStr}
 - Klicks/Monat: ${clicksStr}
 - Keywords: ${kwStr}
-Tabelle: Metrik | Wert | Einordnung | Strategische Bedeutung (3 Zeilen).
+Einordnung + strategische Bedeutung + Themen mit höchster Suchnachfrage (aus Top-Seiten ablesen).
 
 ## 2.3 Wettbewerbsvergleich digital
-${hasCompetitors ? `Basis: SISTRIX-Daten von ${competitorData.length} Wettbewerbern.` : 'Keine Wettbewerber-SISTRIX-Daten — Brancheneinordnung.'}
-Tabelle: Domain | Sichtbarkeit | Einordnung (max. 4 Zeilen). 2 Chancen + 2 Risiken als Bullets.
+${hasCompetitors ? `Basis: SISTRIX-Daten von ${competitorData.length} Wettbewerbern (aus den SISTRIX-Daten oben).` : 'Keine Wettbewerber-SISTRIX-Daten — allgemeine Brancheneinordnung.'}
+Positionierung im digitalen Wettbewerb, Interpretation der Unterschiede, 2 Chancen, 2 Risiken.
 
 ## 2.4 Demand Gaps & Quick Wins
-Demand Gaps: 3 Bullets. Quick Wins: 3 Bullets (sofort/kurzfristig/mittelfristig).
+3 unbesetzte Nachfragebereiche, 3 priorisierte Quick Wins (sofort/kurzfristig/mittelfristig).
 
 ---
 
 # Kapitel 3: Synthese & Gesprächsvorbereitung {#kapitel-3}
 
 ## 3.1 Analyse-Score
-Tabelle: Kriterium | Score /10 | 1-Satz-Begründung
-Kriterien: Positionierungsklarheit | Zielgruppenklarheit | Angebotsklarheit | Differenzierung | Digitale Sichtbarkeit | Kommunikationsstärke | Gesamteindruck
+Tabelle mit Score /10 und Begründung für: Positionierungsklarheit, Zielgruppenklarheit, Angebotsklarheit, Differenzierung, Digitale Sichtbarkeit, Kommunikationsstärke, Gesamteindruck.
 
 ## 3.2 Priorisierte Problemfelder
-**Kurzfristig (0–12 M):** 3 Bullets (Symptom + Beleg aus Analyse)
-**Mittelfristig (1–3 J):** 2 Bullets (strategische Lücke)
-**Langfristig (3–7 J):** 2 Bullets (strukturell/Disruption)
+**Kurzfristig (0–12 Monate):** Akuter Handlungsbedarf — Symptome beim Mandanten, Belege aus der Analyse.
+**Mittelfristig (1–3 Jahre):** Strategische Lücken, Markt-/Wettbewerbsveränderungen ohne Reaktion.
+**Langfristig (3–7 Jahre):** Strukturelle Herausforderungen, Disruptionspotenziale.
 
 ## 3.3 Executive Summary & Einstiegsfragen
-**Die 5 wichtigsten Punkte:** 5 Bullets, je max. 1 Satz.
-**5 Einstiegsfragen:** Nummerierte Liste, je 1 Satz.`;
+**5 wichtigste Punkte für das Erstgespräch** (kompakt, präzise).
+**5 Einstiegsfragen als offene Hypothesen** (konkret formuliert, Antwort provozierend).`;
 }
 
 export default async function handler(req, res) {

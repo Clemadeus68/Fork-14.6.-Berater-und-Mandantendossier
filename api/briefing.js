@@ -31,8 +31,6 @@ Basis-Analyse:\n${analyseContext}`;
 ---
 Erstelle das vollständige Akquise-Briefing für ${name} (${today}). Alle 5 Abschnitte in einem Durchgang.
 
-KOMPAKTFORMAT — PFLICHT: Stichpunkte statt Fließtext. Je Defizit max. 5 Zeilen. Je INQA-Thema max. 4 Bullets. Keine Einleitungssätze.
-
 # Akquise-Briefing: ${name}
 *Erstellt am: ${today} — vertraulich für Clemens Gutmann*
 
@@ -49,50 +47,74 @@ KOMPAKTFORMAT — PFLICHT: Stichpunkte statt Fließtext. Je Defizit max. 5 Zeile
 
 ## 1. Kerndefizite — priorisiert
 
-5 Defizite, je als kompakten Block:
-**Defizit N: [Titel]**
-- Befund: [1 Satz, konkret]
-- Ursache: [1 Satz]
-- Schmerz: [1 Satz in Mandantensprache]
-- Kap.-Ref.: [z.B. Kap. 1.2]
+Schreibe **5 Defizite**, jeweils mit:
+- **Bezeichnung** (prägnanter Titel)
+- **Befund:** Was genau ist das Problem? Konkret, direkt, Zahlen wenn vorhanden.
+- **Sichtbar in der Analyse:** Kapitelreferenz (z.B. Kap. 1.2)
+- **Wahrscheinliche Ursache:** Führung? Strategie? Ressourcen? Wissen? Ehrliche Einschätzung.
+- **Schmerz für den Mandanten:** Wie fühlt sich das für die Geschäftsführung an — in ihrer eigenen Sprache.
+
+Priorisierung: dringendste Defizite zuerst.
 
 ---
 
 ## 2. INQA-Anknüpfungspunkte
 
-Für jedes Themenfeld 3 Bullets: Relevanz | Anknüpfung | Projektidee
+Für jedes der drei INQA-Themenfelder:
+- **Relevanz:** hoch / mittel / niedrig
+- **Konkrete Anknüpfung:** Was zeigt die Analyse, das auf dieses Defizit hinweist?
+- **Mögliche INQA-Projektidee:** Konkrete Maßnahme, die ich anbieten könnte.
 
 **Themenfeld 1: Unternehmenskultur & Führung**
 **Themenfeld 2: Personal & Kompetenz**
 **Themenfeld 3: Digitalisierung & Innovation**
 
-INQA-Gesamteignung: [sehr gut/gut/bedingt/gering] — 1 Satz Begründung.
+Am Ende: **INQA-Gesamteignung** (sehr gut / gut / bedingt / gering) mit Begründung.
 
 ---
 
 ## 3. Beratungsleistungen — konkrete Ansatzpunkte
 
-**Kurzfristig (Erstgespräch):** 3 Bullets: Leistung + Warum jetzt (je 1 Satz)
-**Mittelfristiges Projekt:** 3 Bullets: Hypothese | Umfang | Partner nötig?
-**BAFA-Erstberatung:** Ja/Nein/Prüfen + 1 Satz Begründung
+**Kurzfristig anbieten (Erstgespräch/Quick Wins):**
+3 konkrete Leistungen mit Begründung, warum genau jetzt.
+
+**Mittelfristiges Projekt (3–12 Monate):**
+- Projekthypothese: Was wäre ein realistisches Beratungsprojekt?
+- Umfang (grob): Tage/Monate
+- Partnerleistungen nötig? (Tech, Recht, Tools, Schulungen)
+
+**BAFA-Erstberatung:**
+- Passt das Unternehmen? Ja / Nein / Prüfen
+- Begründung
 
 ---
 
 ## 4. Gesprächsstrategie & Einstieg
 
-**Hauptthema Erstgespräch:** 1 Satz.
-**3 Einstiegsfragen:** Nummeriert, je Frage + 1 Satz erwartete Reaktion.
-**3 Hypothesen zum Überprüfen:** 3 Bullets.
-**Nicht ansprechen (noch nicht):** 2 Bullets.
+**Mein Hauptthema fürs Erstgespräch:**
+Das eine Thema, das ich als Einstieg wählen würde — und warum.
+
+**Die 3 besten Einstiegsfragen:**
+Für jede Frage: Formulierung + erwartete Reaktion / was ich damit auslösen will.
+
+**Hypothesen, die ich überprüfen will:** (3 Stück)
+
+**Was ich NICHT ansprechen sollte (noch nicht):**
+Was wäre zu früh, zu sensibel, oder könnte den Mandanten abschrecken?
 
 ---
 
 ## 5. Risikoeinschätzung & Qualifizierung
 
-**Mandantenattraktivität:** Ja/Bedingt/Nein — 1 Satz.
-**Erstauftragswahrscheinlichkeit:** hoch/mittel/niedrig — 1 Satz.
-**2 mögliche Einwände + meine Antwort auf den stärksten:** 3 Bullets.
-**Nächste Schritte nach Erstgespräch:** 2 Bullets.`;
+**Ist das ein attraktiver Mandant für be nice?** Ja / Bedingt / Nein — Begründung.
+
+**Wahrscheinlichkeit eines Erstauftrags:** hoch / mittel / niedrig
+
+**Mögliche Einwände des Mandanten:** (2 konkrete)
+
+**Meine Antwort auf den wichtigsten Einwand:**
+
+**Nächste Schritte nach dem Erstgespräch:** (2 Schritte)`;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
