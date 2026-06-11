@@ -44,6 +44,19 @@ function parseMarkdown(md) {
       html.push(`<h1 id="${id}">${inlineMarkdown(escHtml(text))}</h1>`);
       i++; continue;
     }
+    if (/^## Inhaltsverzeichnis\s*$/i.test(line.trim())) {
+      const tocItems = [];
+      i++;
+      while (i < lines.length && (/^[-*] /.test(lines[i]) || lines[i].trim() === '')) {
+        if (/^[-*] /.test(lines[i])) tocItems.push(lines[i].slice(2).trim());
+        i++;
+      }
+      if (tocItems.length > 0) {
+        const listHtml = tocItems.map(item => `<li>${inlineMarkdown(escHtml(item))}</li>`).join('\n');
+        html.push(`<div class="toc-box"><ul>${listHtml}</ul></div>`);
+      }
+      continue;
+    }
     if (/^## /.test(line)) {
       const raw = line.slice(3).trim();
       const id = slugId(raw);
@@ -106,7 +119,7 @@ function parseMarkdown(md) {
 
 // ── PDF HTML builder ───────────────────────────────────────────────────────────
 
-function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title }) {
+function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title, logoBase64 }) {
   const docTitle = title || 'Strategieanalyse';
 
   return `<!DOCTYPE html>
@@ -127,7 +140,7 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 
   /* Charts */
   .charts-section { margin-bottom: 32px; page-break-inside: avoid; }
-  .charts-section img { max-width: 100%; border-radius: 6px; border: 1px solid #E9E9E9; }
+  .charts-section img { max-width: 100%; max-height: 300px; object-fit: contain; border-radius: 6px; border: 1px solid #E9E9E9; }
   .section-label { font-size: 9pt; font-weight: 700; color: #777; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
 
   /* Headings */
@@ -135,30 +148,16 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
   h2 { font-size: 12pt; font-weight: 700; color: #33AB97; margin: 22px 0 7px; }
   h3 { font-size: 11pt; font-weight: 700; color: #33AB97; margin: 14px 0 5px; }
 
-  /* TOC section — styled box when Claude generates ## Inhaltsverzeichnis */
-  h2#inhaltsverzeichnis { visibility: hidden; height: 0; margin: 0; padding: 0; overflow: hidden; line-height: 0; }
-  h2#inhaltsverzeichnis + ul {
-    background: #f5fbee;
-    border-left: 4px solid #8CC63E;
-    padding: 12px 20px;
-    margin-bottom: 28px;
-    border-radius: 0 6px 6px 0;
-    list-style: none;
-    page-break-inside: avoid;
-  }
-  h2#inhaltsverzeichnis + ul::before {
-    content: "Inhaltsverzeichnis";
-    display: block;
-    font-size: 10pt;
-    font-weight: 700;
-    color: #8CC63E;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
-  }
-  h2#inhaltsverzeichnis + ul li { margin: 4px 0; font-size: 10pt; }
-  h2#inhaltsverzeichnis + ul li a { color: #13A1B6; text-decoration: none; }
-  h2#inhaltsverzeichnis + ul li a:hover { text-decoration: underline; }
+  /* TOC */
+  .toc-box { background: #f5fbee; border-left: 4px solid #8CC63E; padding: 12px 20px; margin: 12px 0 28px; border-radius: 0 6px 6px 0; page-break-inside: avoid; }
+  .toc-box::before { content: "Inhaltsverzeichnis"; display: block; font-size: 10pt; font-weight: 700; color: #8CC63E; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .toc-box ul { list-style: none; margin: 0; padding: 0; }
+  .toc-box li { margin: 4px 0; font-size: 10pt; }
+  .toc-box a { color: #13A1B6; text-decoration: none; }
+  .toc-box a:hover { text-decoration: underline; }
+
+  /* Print footer */
+  .print-footer { display: none; }
 
   /* Content */
   p { line-height: 1.65; margin: 5px 0; }
@@ -179,6 +178,7 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
     body { font-size: 10pt; padding: 0; }
     @page { margin: 2cm; }
     h2 { page-break-after: avoid; }
+    .print-footer { display: block; position: fixed; bottom: 0; left: 0; right: 0; font-size: 8pt; color: #777777; font-family: Calibri, 'Segoe UI', sans-serif; border-top: 1px solid #E9E9E9; padding: 4px 0; background: white; }
   }
 </style>
 </head>
@@ -186,7 +186,7 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 
 <div class="doc-header">
   <div class="doc-header-left">
-    <img src="/logo.png" alt="be nice">
+    <img src="${logoBase64 || '/logo.png'}" alt="be nice">
     <div>
       <div class="doc-header-title">${escHtml(docTitle)}</div>
       <div style="font-size:10pt;color:#777;margin-top:3px;">${escHtml(companyName || url || '')}</div>
@@ -210,6 +210,8 @@ ${chartImage ? `
 ${reportHtml}
 </div>
 
+<div class="print-footer">be nice Managementberatung | www.nice-network.de</div>
+
 </body>
 </html>`;
 }
@@ -219,16 +221,28 @@ ${reportHtml}
 export async function exportToPDF({ chartCardRef, report, url, companyName, title }) {
   const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+  let logoBase64 = null;
+  try {
+    const logoResp = await fetch('/logo.png');
+    if (logoResp.ok) {
+      const buf = await logoResp.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = '';
+      bytes.forEach(b => { bin += String.fromCharCode(b); });
+      logoBase64 = 'data:image/png;base64,' + btoa(bin);
+    }
+  } catch (_) {}
+
   let chartImage = null;
   if (chartCardRef?.current) {
     try {
-      const canvas = await html2canvas(chartCardRef.current, { scale: 1.5, useCORS: true, logging: false, backgroundColor: '#ffffff' });
+      const canvas = await html2canvas(chartCardRef.current, { scale: 1.0, useCORS: true, logging: false, backgroundColor: '#ffffff' });
       chartImage = canvas.toDataURL('image/png');
     } catch (e) { console.warn('Chart capture failed:', e); }
   }
 
   const reportHtml = parseMarkdown(report || '');
-  const html = buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title });
+  const html = buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title, logoBase64 });
 
   const win = window.open('', '_blank', 'width=900,height=700');
   if (!win) { alert('Bitte Popup-Blocker deaktivieren für PDF-Export.'); return; }
@@ -370,22 +384,6 @@ export async function exportToWord({ report, url, companyName, title }) {
     ],
   });
 
-  // ── Title block (first page) ───────────────────────────────────────────────
-  const titleBlock = [
-    new Paragraph({
-      children: [new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 48, font: 'Calibri' })],
-      spacing: { before: 0, after: 80 },
-      border: { bottom: { color: GREEN, style: BorderStyle.SINGLE, size: 16, space: 1 } },
-    }),
-    new Paragraph({
-      children: [new TextRun({ text: companyName || url || '', color: DARKGR, size: 26, font: 'Calibri' })],
-      spacing: { before: 80, after: 40 },
-    }),
-    new Paragraph({
-      children: [new TextRun({ text: `Clemens Gutmann | be nice Managementberatung | ${today}`, color: MIDGR, size: 18, font: 'Calibri', italics: true })],
-      spacing: { before: 0, after: 320 },
-    }),
-  ];
 
   // ── Body from Markdown ─────────────────────────────────────────────────────
   const lines = (report || '').split('\n');
@@ -454,7 +452,7 @@ export async function exportToWord({ report, url, companyName, title }) {
 
       if (parsed.length > 0) {
         const colCount = Math.max(...parsed.map(r => r.length));
-        const colWidthDXA = Math.floor(9000 / colCount);
+        const colPct = Math.floor(5000 / colCount);
         const docRows = parsed.map((cells, ri) =>
           new TableRow({
             children: Array.from({ length: colCount }, (_, ci) => {
@@ -466,7 +464,7 @@ export async function exportToWord({ report, url, companyName, title }) {
                   ),
                   spacing: { before: 40, after: 40 },
                 })],
-                width: { size: colWidthDXA, type: WidthType.DXA },
+                width: { size: colPct, type: WidthType.PCT },
                 shading: ri === 0 ? { fill: LIGHTGR, type: ShadingType.SOLID } : undefined,
               });
             }),
@@ -476,7 +474,7 @@ export async function exportToWord({ report, url, companyName, title }) {
         body.push(new Table({
           rows: docRows,
           layout: TableLayoutType.FIXED,
-          width: { size: 9000, type: WidthType.DXA },
+          width: { size: 5000, type: WidthType.PCT },
         }));
         body.push(new Paragraph({ children: [], spacing: { before: 80, after: 80 } }));
       }
@@ -507,7 +505,7 @@ export async function exportToWord({ report, url, companyName, title }) {
       },
       headers: { default: docHeader },
       footers: { default: docFooter },
-      children: [...titleBlock, ...body],
+      children: [...body],
     }],
   });
 
