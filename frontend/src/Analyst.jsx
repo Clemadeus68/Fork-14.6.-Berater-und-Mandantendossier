@@ -171,7 +171,7 @@ export default function Analyst() {
   };
   const handleCompKey = (e) => { if (e.key === "Enter") { e.preventDefault(); addCompetitor(); } };
 
-  const allCompetitors = [...new Set([...autoCompetitors, ...userCompetitors])];
+  const allCompetitors = [...new Set([...userCompetitors, ...autoCompetitors])];
 
   // ── Main Analysis ──────────────────────────────────────────────────────────
   const run = async () => {

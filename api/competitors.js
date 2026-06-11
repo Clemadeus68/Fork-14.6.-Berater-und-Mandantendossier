@@ -86,19 +86,21 @@ export default async function handler(req) {
   const rawText = claudeData.content?.[0]?.text?.trim() || ']';
   const text = '[' + rawText;
 
+  const clean = (d) => d.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toLowerCase();
+  const cleanedUser = userCompetitors.map(clean).filter(Boolean);
+  const userSet = new Set(cleanedUser);
+
   let candidates = [];
   try {
     const raw = JSON.parse(text);
     if (Array.isArray(raw)) {
-      const clean = (d) => d.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toLowerCase();
-      const all = [...raw, ...userCompetitors].map(clean).filter(Boolean);
-      candidates = [...new Set(all)].slice(0, 15);
+      // User-entered first, then Claude's suggestions fill the rest
+      const all = [...cleanedUser, ...raw.map(clean)].filter(Boolean);
+      candidates = [...new Set(all)].slice(0, 20);
     }
   } catch (_) {
-    candidates = userCompetitors.map(c => c.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
+    candidates = cleanedUser;
   }
-
-  const userSet = new Set(userCompetitors.map(c => c.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toLowerCase()));
 
   // Liveness + parking check — filter dead and parked domains
   const validationResults = await Promise.allSettled(
@@ -113,10 +115,14 @@ export default async function handler(req) {
     })
   );
 
-  const competitors = validationResults
-    .map(r => r.status === 'fulfilled' ? r.value : null)
-    .filter(Boolean)
-    .slice(0, 14); // SISTRIX picks top 10 by visibility from these
+  const validated = new Set(
+    validationResults.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean)
+  );
+
+  // User-entered always first (in original order), auto-discovered fills up to 10
+  const userFirst = cleanedUser.filter(d => validated.has(d));
+  const autoFill = candidates.filter(d => !userSet.has(d) && validated.has(d));
+  const competitors = [...userFirst, ...autoFill].slice(0, 10);
 
   return new Response(JSON.stringify({ competitors, hadContent: content.length > 0 }), {
     status: 200,
