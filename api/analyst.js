@@ -33,16 +33,46 @@ async function fetchSistrix(domain, apiKey) {
   return { domain, visibility, totalClicks: Math.round(totalClicks), totalKeywords, totalValue: Math.round(totalValue), topPages };
 }
 
+const SUBPAGE_SCORES = [
+  { patterns: ['ueber', 'über', 'uber', 'about', 'unternehmen', 'company', 'wer-wir'], score: 10 },
+  { patterns: ['referenz', 'reference', 'kunden', 'customer', 'fallstudie', 'case'], score: 9 },
+  { patterns: ['projekt', 'portfolio', 'work', 'erfolg'], score: 8 },
+  { patterns: ['team', 'mitarbeiter', 'people', 'wir-sind'], score: 7 },
+  { patterns: ['leistung', 'service', 'angebot', 'loesung', 'lösung', 'solution'], score: 6 },
+];
+const SUBPAGE_SKIP = ['/wp-admin', '/login', '/cart', '/warenkorb', '/checkout',
+  '/datenschutz', '/impressum', '/privacy', '/agb', '/sitemap', '.xml', '.pdf', '#', '?'];
+
+function scoreSubpage(urlStr) {
+  const lower = urlStr.toLowerCase();
+  if (SUBPAGE_SKIP.some(p => lower.includes(p))) return 0;
+  for (const { patterns, score } of SUBPAGE_SCORES) {
+    if (patterns.some(p => lower.includes(p))) return score;
+  }
+  return 0;
+}
+
+async function scrapeOnePage(pageUrl, apiKey, timeoutMs, extraFormats = {}) {
+  const r = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({ url: pageUrl, formats: ['markdown'], onlyMainContent: true, ...extraFormats }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!r.ok) return '';
+  const d = await r.json();
+  return d?.success ? (d.data?.markdown || '') : '';
+}
+
 async function crawlWithFirecrawl(url, apiKey) {
+  const homeStart = Date.now();
+
   const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({
       url,
-      formats: ['markdown', 'extract'],
+      formats: ['markdown', 'extract', 'links'],
       extract: {
         schema: {
           type: 'object',
@@ -58,7 +88,7 @@ async function crawlWithFirecrawl(url, apiKey) {
       },
       onlyMainContent: true,
     }),
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(20000),
   });
 
   if (!response.ok) {
@@ -69,11 +99,41 @@ async function crawlWithFirecrawl(url, apiKey) {
   const data = await response.json();
   if (!data.success) throw new Error('Firecrawl: Crawling nicht erfolgreich');
 
-  return {
-    markdown: data.data?.markdown || '',
-    metadata: data.data?.metadata || {},
-    extract: data.data?.extract || {},
-  };
+  const homeMarkdown = data.data?.markdown || '';
+  const metadata = data.data?.metadata || {};
+  const extract = data.data?.extract || {};
+  const rawLinks = data.data?.links || [];
+  const homeElapsed = Date.now() - homeStart;
+
+  // Scrape relevant subpages if homepage was fast enough
+  let subMarkdowns = [];
+  if (homeElapsed < 15000 && rawLinks.length > 0) {
+    try {
+      const baseDomain = new URL(url).hostname;
+      const subpages = rawLinks
+        .filter(link => { try { return new URL(link).hostname === baseDomain; } catch { return false; } })
+        .map(link => ({ url: link, score: scoreSubpage(link) }))
+        .filter(l => l.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map(l => l.url);
+
+      if (subpages.length > 0) {
+        const results = await Promise.allSettled(
+          subpages.map(pageUrl => scrapeOnePage(pageUrl, apiKey, 8000))
+        );
+        subMarkdowns = results
+          .map(r => r.status === 'fulfilled' ? r.value : '')
+          .filter(Boolean);
+      }
+    } catch (_) {}
+  }
+
+  const markdown = subMarkdowns.length > 0
+    ? [homeMarkdown, ...subMarkdowns].join('\n\n---\n\n')
+    : homeMarkdown;
+
+  return { markdown, metadata, extract };
 }
 
 function visTier(v) {
@@ -149,7 +209,7 @@ function buildContext(url, crawlResult, sistrix, competitorData, extraMeta) {
     extraMeta?.produkt && `Manuell: Produkt/DL = ${extraMeta.produkt}`,
   ].filter(Boolean).join('\n');
 
-  const content = markdown.slice(0, 12000);
+  const content = markdown.slice(0, 20000);
   const sistrixBlock = buildSistrixBlock(sistrix, competitorData);
   return { metaBlock, content, sistrixBlock };
 }
@@ -169,7 +229,7 @@ Schreibe direkt, konkret, hypothesenstark. Kennzeichne Annahmen mit "(Hypothese)
 WEBSITE: ${url}
 META-DATEN: ${metaBlock || '(keine)'}
 ${sistrixBlock}
-WEBSITE-INHALT (erste 12.000 Zeichen):
+WEBSITE-INHALT (Homepage + relevante Unterseiten, max. 20.000 Zeichen):
 ${content}
 
 ---
