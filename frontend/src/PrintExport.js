@@ -122,6 +122,15 @@ function parseMarkdown(md) {
 function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title, logoBase64 }) {
   const docTitle = title || 'Strategieanalyse';
 
+  // TOC vor dem Chart platzieren: aus reportHtml extrahieren
+  let tocHtml = '';
+  let bodyHtml = reportHtml;
+  const tocMatch = reportHtml.match(/<div class="toc-box">[\s\S]*?<\/div>/);
+  if (tocMatch) {
+    tocHtml = tocMatch[0];
+    bodyHtml = reportHtml.replace(tocMatch[0], '');
+  }
+
   return `<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -135,12 +144,11 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
   .doc-header { border-bottom: 4px solid #8CC63E; padding: 14px 0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
   .doc-header-left { display: flex; align-items: center; gap: 12px; }
   .doc-header-left img { height: 40px; width: auto; }
-  .doc-header-title { font-size: 15pt; font-weight: 700; color: #454544; }
-  .doc-header-meta { font-size: 9pt; color: #777; text-align: right; line-height: 1.6; }
+.doc-header-meta { font-size: 9pt; color: #777; text-align: right; line-height: 1.6; }
 
   /* Charts */
   .charts-section { margin-bottom: 32px; page-break-inside: avoid; }
-  .charts-section img { max-width: 100%; max-height: 300px; object-fit: contain; border-radius: 6px; border: 1px solid #E9E9E9; }
+  .charts-section img { width: 100%; height: auto; object-fit: contain; border-radius: 6px; border: 1px solid #E9E9E9; }
   .section-label { font-size: 9pt; font-weight: 700; color: #777; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
 
   /* Headings */
@@ -176,9 +184,27 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 
   @media print {
     body { font-size: 10pt; padding: 0; }
-    @page { margin: 2cm; }
+    @page {
+      margin: 2cm;
+      @bottom-left {
+        content: "be nice Managementberatung | www.nice-network.de";
+        font-family: Calibri, 'Segoe UI', sans-serif;
+        font-size: 8pt;
+        color: #777777;
+        border-top: 1px solid #E9E9E9;
+        padding-top: 4px;
+      }
+      @bottom-right {
+        content: counter(page) " / " counter(pages);
+        font-family: Calibri, 'Segoe UI', sans-serif;
+        font-size: 8pt;
+        color: #777777;
+        border-top: 1px solid #E9E9E9;
+        padding-top: 4px;
+      }
+    }
     h2 { page-break-after: avoid; }
-    .print-footer { display: block; position: fixed; bottom: 0; left: 0; right: 0; font-size: 8pt; color: #777777; font-family: Calibri, 'Segoe UI', sans-serif; border-top: 1px solid #E9E9E9; padding: 4px 0; background: white; }
+    .print-footer { display: none; }
   }
 </style>
 </head>
@@ -187,10 +213,6 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
 <div class="doc-header">
   <div class="doc-header-left">
     <img src="${logoBase64 || '/logo.png'}" alt="be nice">
-    <div>
-      <div class="doc-header-title">${escHtml(docTitle)}</div>
-      <div style="font-size:10pt;color:#777;margin-top:3px;">${escHtml(companyName || url || '')}</div>
-    </div>
   </div>
   <div class="doc-header-meta">
     Clemens Gutmann | be nice Managementberatung<br>
@@ -198,6 +220,8 @@ function buildPrintHtml({ chartImage, reportHtml, companyName, url, today, title
     ${escHtml(today)}
   </div>
 </div>
+
+${tocHtml ? `<div style="margin-bottom:28px;">${tocHtml}</div>` : ''}
 
 ${chartImage ? `
 <div class="charts-section" id="grafischer-ueberblick">
@@ -207,7 +231,7 @@ ${chartImage ? `
 ` : ''}
 
 <div class="report-body">
-${reportHtml}
+${bodyHtml}
 </div>
 
 <div class="print-footer">be nice Managementberatung | www.nice-network.de</div>
@@ -261,7 +285,7 @@ export async function exportToWord({ report, url, companyName, title }) {
   const {
     Document, Packer, Paragraph, TextRun, BorderStyle, AlignmentType,
     Table, TableRow, TableCell, WidthType, ShadingType, TableLayoutType,
-    Header, Footer, PageNumber, InternalHyperlink, Bookmark, ImageRun,
+    Header, Footer, PageNumber, InternalHyperlink, Bookmark, ImageRun, VerticalAlign,
   } = await import('docx');
 
   const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -346,22 +370,48 @@ export async function exportToWord({ report, url, companyName, title }) {
   }
 
   // ── Header (every page) ────────────────────────────────────────────────────
+  const NO_BDR  = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+  const NO_BDRS = { top: NO_BDR, bottom: NO_BDR, left: NO_BDR, right: NO_BDR };
+  const CONT_W  = 9026; // A4 (11906) − 2 × 1440 DXA Rand
+
   const docHeader = new Header({
     children: [
-      // Logo-Zeile
-      ...(logoData ? [new Paragraph({
-        children: [new ImageRun({ data: logoData, transformation: { width: 66, height: 36 }, type: 'png' })],
-        spacing: { before: 0, after: 40 },
-      })] : []),
-      // Titel + grüne Linie
-      new Paragraph({
-        children: [
-          new TextRun({ text: docTitle, bold: true, color: DARKGR, size: 20, font: 'Calibri' }),
-          new TextRun({ text: companyName ? `  |  ${companyName}` : '', color: MIDGR, size: 18, font: 'Calibri' }),
-        ],
-        alignment: AlignmentType.LEFT,
-        border: { bottom: { color: GREEN, style: BorderStyle.SINGLE, size: 8, space: 4 } },
-        spacing: { after: 80 },
+      new Table({
+        width: { size: CONT_W, type: WidthType.DXA },
+        columnWidths: [2200, CONT_W - 2200],
+        borders: {
+          top: NO_BDR, left: NO_BDR, right: NO_BDR, insideH: NO_BDR, insideV: NO_BDR,
+          bottom: { style: BorderStyle.SINGLE, size: 8, color: GREEN, space: 0 },
+        },
+        rows: [new TableRow({ children: [
+          new TableCell({
+            borders: NO_BDRS,
+            width: { size: 2200, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            margins: { top: 60, bottom: 60, left: 0, right: 0 },
+            children: [new Paragraph({
+              children: logoData
+                ? [new ImageRun({ data: logoData, transformation: { width: 80, height: 44 }, type: 'png' })]
+                : [new TextRun({ text: 'be nice', font: 'Calibri', size: 20, bold: true, color: GREEN })],
+              spacing: { before: 0, after: 0 },
+            })],
+          }),
+          new TableCell({
+            borders: NO_BDRS,
+            width: { size: CONT_W - 2200, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            margins: { top: 60, bottom: 60, left: 0, right: 0 },
+            children: [new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [
+                new TextRun({ text: 'Clemens Gutmann | be nice Managementberatung', font: 'Calibri', size: 16, color: MIDGR }),
+                new TextRun({ text: 'www.nice-network.de', font: 'Calibri', size: 16, color: MIDGR, break: 1 }),
+                new TextRun({ text: today, font: 'Calibri', size: 16, color: MIDGR, break: 1 }),
+              ],
+              spacing: { before: 0, after: 0 },
+            })],
+          }),
+        ]})]
       }),
     ],
   });
@@ -370,16 +420,40 @@ export async function exportToWord({ report, url, companyName, title }) {
   const docFooter = new Footer({
     children: [
       new Paragraph({
-        children: [
-          new TextRun({ text: 'Clemens Gutmann | be nice Managementberatung | www.nice-network.de', color: MIDGR, size: 16, font: 'Calibri' }),
-          new TextRun({ text: '    Seite ', color: MIDGR, size: 16, font: 'Calibri' }),
-          new TextRun({ children: [PageNumber.CURRENT], color: MIDGR, size: 16, font: 'Calibri' }),
-          new TextRun({ text: ' / ', color: MIDGR, size: 16, font: 'Calibri' }),
-          new TextRun({ children: [PageNumber.TOTAL_PAGES], color: MIDGR, size: 16, font: 'Calibri' }),
-        ],
-        alignment: AlignmentType.LEFT,
+        children: [],
         border: { top: { color: LIGHTGR, style: BorderStyle.SINGLE, size: 4, space: 4 } },
-        spacing: { before: 80 },
+        spacing: { before: 60, after: 0 },
+      }),
+      new Table({
+        width: { size: CONT_W, type: WidthType.DXA },
+        columnWidths: [CONT_W - 2000, 2000],
+        rows: [new TableRow({ children: [
+          new TableCell({
+            borders: NO_BDRS,
+            width: { size: CONT_W - 2000, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            margins: { top: 40, bottom: 40, left: 0, right: 60 },
+            children: [new Paragraph({
+              children: [new TextRun({ text: 'be nice Managementberatung | www.nice-network.de', font: 'Calibri', size: 16, color: MIDGR })],
+              spacing: { before: 0, after: 0 },
+            })],
+          }),
+          new TableCell({
+            borders: NO_BDRS,
+            width: { size: 2000, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            margins: { top: 40, bottom: 40, left: 60, right: 0 },
+            children: [new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [
+                new TextRun({ children: [PageNumber.CURRENT], font: 'Calibri', size: 16, color: MIDGR }),
+                new TextRun({ text: ' / ', font: 'Calibri', size: 16, color: MIDGR }),
+                new TextRun({ children: [PageNumber.TOTAL_PAGES], font: 'Calibri', size: 16, color: MIDGR }),
+              ],
+              spacing: { before: 0, after: 0 },
+            })],
+          }),
+        ]})]
       }),
     ],
   });
