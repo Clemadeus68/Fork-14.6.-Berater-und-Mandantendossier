@@ -232,6 +232,14 @@ export default function Analyst() {
         body: JSON.stringify({
           url: targetUrl,
           competitorData: competitorSistrixData,
+          sistrixMain: sistrixData ? {
+            domain: sistrixData.domain,
+            visibility: sistrixData.visibility,
+            totalClicks: sistrixData.totalClicks,
+            totalKeywords: sistrixData.totalKeywords,
+            totalValue: sistrixData.totalValue,
+            topPages: sistrixData.topPages,
+          } : null,
           extraMeta: { name: extraName, branche: extraBranche, produkt: extraProdukt },
         }),
       });

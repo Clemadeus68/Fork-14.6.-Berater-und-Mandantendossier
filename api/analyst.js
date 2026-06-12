@@ -332,7 +332,7 @@ export default async function handler(req) {
     status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-  const { url, competitorData = [], extraMeta = {} } = await req.json();
+  const { url, competitorData = [], extraMeta = {}, sistrixMain = null } = await req.json();
   if (!url) return new Response(JSON.stringify({ error: 'URL fehlt' }), {
     status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
@@ -346,7 +346,9 @@ export default async function handler(req) {
   try {
     const [crawl, sist] = await Promise.allSettled([
       crawlWithFirecrawl(targetUrl, firecrawlKey),
-      sistrixKey ? fetchSistrix(domain, sistrixKey) : Promise.resolve(null),
+      sistrixMain ? Promise.resolve(sistrixMain)
+        : sistrixKey ? fetchSistrix(domain, sistrixKey)
+        : Promise.resolve(null),
     ]);
     if (crawl.status === 'rejected') throw new Error(crawl.reason?.message || 'Crawling fehlgeschlagen');
     crawlResult = crawl.value;
