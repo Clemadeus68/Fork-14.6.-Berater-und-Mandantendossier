@@ -221,9 +221,10 @@ export default function Analyst() {
       });
       const d = compRes.ok ? await compRes.json() : null;
       if (d?.competitors !== undefined) {
-        identifiedCompetitors = d.competitors;
-        setAutoCompetitors(d.competitors.filter(c => !userCompetitors.includes(c)));
-        setCompetitorStatus(d.competitors.length > 0 ? "found" : "empty");
+        const autoFound = d.competitors.filter(c => !userCompetitors.includes(c));
+        identifiedCompetitors = [...new Set([...userCompetitors, ...d.competitors])];
+        setAutoCompetitors(autoFound);
+        setCompetitorStatus(identifiedCompetitors.length > 0 ? "found" : "empty");
       } else {
         setCompetitorStatus("error");
       }
