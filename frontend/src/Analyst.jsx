@@ -527,7 +527,6 @@ export default function Analyst() {
                   disabled={saveLoading} onClick={saveResult}>
                   {saveLoading ? <><span style={s.spinner} />Speichern…</> : "🔗 Ergebnis speichern"}
                 </button>
-                <button style={s.btnDl} onClick={() => dlMd(`${dateStr}_${baseName}_Dossier.json`, JSON.stringify(dossier, null, 2))}>⬇ .json</button>
                 {savedHistory.length > 0 && (
                   <div style={{ position: "relative" }}>
                     <button style={s.btnSecondary} onClick={() => setShowHistory(h => !h)}>🕘 Letzte ({savedHistory.length})</button>
