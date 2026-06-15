@@ -389,10 +389,9 @@ export default async function handler(req) {
       model: 'claude-sonnet-4-6',
       max_tokens: 32000,
       stream: true,
-      // Antwort als JSON erzwingen: Claude beginnt die Assistant-Turn mit {
+      system: 'Du antwortest ausschließlich mit einem einzigen validen JSON-Objekt. Kein Text davor, kein Text danach, keine Markdown-Codeblöcke, keine Erklärungen. Nur das JSON-Objekt selbst.',
       messages: [
         { role: 'user', content: prompt },
-        { role: 'assistant', content: '{' },
       ],
     }),
   });
