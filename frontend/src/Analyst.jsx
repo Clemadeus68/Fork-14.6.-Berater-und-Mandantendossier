@@ -1,6 +1,22 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import ExternalIntelligence from "./ExternalIntelligence.jsx";
 import { exportToPDF, exportToWord } from "./PrintExport.js";
+import { exportToDossier } from "./dossierExport.js";
+
+// Robustes Parsen des Dossier-JSON aus dem Claude-Stream.
+// Der API-Call prefillt die Assistant-Antwort mit "{", daher beginnt der Stream
+// erst danach. Wir versuchen mehrere Varianten, damit es auch ohne Prefill klappt.
+function parseDossierJSON(raw) {
+  const tryParse = (s) => { try { return JSON.parse(s); } catch { return null; } };
+  let s = (raw || "").trim()
+    .replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/, "").trim();
+  let r = tryParse(s); if (r) return r;
+  r = tryParse("{" + s); if (r) return r;
+  const first = s.indexOf("{"), last = s.lastIndexOf("}");
+  if (first >= 0 && last > first) { r = tryParse(s.slice(first, last + 1)); if (r) return r; }
+  if (last >= 0) { r = tryParse("{" + s.slice(0, last + 1)); if (r) return r; }
+  return null;
+}
 
 const G  = "#8CC63E";
 const DG = "#454544";
@@ -114,6 +130,11 @@ export default function Analyst() {
   const [err, setErr] = useState("");
   const [sistrixData, setSistrixData] = useState(null);
 
+  // Mandanten-Dossier
+  const [dossier, setDossier] = useState(null);
+  const [dossierRaw, setDossierRaw] = useState("");
+  const [dossierLoading, setDossierLoading] = useState(false);
+
   // Briefing state
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefing, setBriefing] = useState("");
@@ -146,6 +167,7 @@ export default function Analyst() {
           setUrl(d.url || '');
           setReport(d.report || '');
           setBriefing(d.briefing || '');
+          setDossier(d.dossier || null);
           setSistrixData(d.sistrixData || null);
           setAutoCompetitors(d.competitors || []);
           setCompetitorStatus(d.competitors?.length > 0 ? 'found' : null);
@@ -177,6 +199,7 @@ export default function Analyst() {
   const run = async () => {
     if (!url.trim()) { setErr("Bitte eine URL eingeben."); return; }
     setErr(""); setReport(""); setBriefing(""); setSistrixData(null);
+    setDossier(null); setDossierRaw("");
     setAutoCompetitors([]); setCompetitorStatus(null); setLoading(true);
 
     const targetUrl = url.trim().startsWith("http") ? url.trim() : "https://" + url.trim();
@@ -184,7 +207,7 @@ export default function Analyst() {
     const initPhases = [
       { label: "Wettbewerber werden identifiziert…", status: "running" },
       { label: "SISTRIX-Daten werden geladen…", status: "pending" },
-      { label: "Website wird gecrawlt — Strategieanalyse wird erstellt…", status: "pending" },
+      { label: "Website wird gecrawlt — Berater- und Mandantendossier wird erstellt…", status: "pending" },
     ];
     setPhases(initPhases);
 
@@ -210,6 +233,7 @@ export default function Analyst() {
     // Step 2: SISTRIX
     updatePhase("SISTRIX-Daten werden geladen…", "running");
     let competitorSistrixData = [];
+    let mainSistrix = null; // lokal halten — React-State ist im selben Lauf noch nicht aktuell
     try {
       const sistrixRes = await fetch("/api/sistrix", {
         method: "POST",
@@ -218,27 +242,29 @@ export default function Analyst() {
       });
       if (sistrixRes.ok) {
         const d = await sistrixRes.json();
-        if (!d.error) { setSistrixData(d); competitorSistrixData = d.competitors || []; }
+        if (!d.error) { setSistrixData(d); mainSistrix = d; competitorSistrixData = d.competitors || []; }
       }
       updatePhase("SISTRIX-Daten werden geladen…", "done");
     } catch { updatePhase("SISTRIX-Daten werden geladen…", "error"); }
 
-    // Step 3: Analyst (unified 3-chapter report)
-    updatePhase("Website wird gecrawlt — Strategieanalyse wird erstellt…", "running");
+    // Step 3: Mandanten-Dossier (ein Dokument, strukturiertes JSON)
+    const dossierPhase = "Website wird gecrawlt — Berater- und Mandantendossier wird erstellt…";
+    updatePhase(dossierPhase, "running");
+    setDossierLoading(true);
     try {
-      const response = await fetch("/api/analyst", {
+      const response = await fetch("/api/dossier", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: targetUrl,
           competitorData: competitorSistrixData,
-          sistrixMain: sistrixData ? {
-            domain: sistrixData.domain,
-            visibility: sistrixData.visibility,
-            totalClicks: sistrixData.totalClicks,
-            totalKeywords: sistrixData.totalKeywords,
-            totalValue: sistrixData.totalValue,
-            topPages: sistrixData.topPages,
+          sistrixMain: mainSistrix ? {
+            domain: mainSistrix.domain,
+            visibility: mainSistrix.visibility,
+            totalClicks: mainSistrix.totalClicks,
+            totalKeywords: mainSistrix.totalKeywords,
+            totalValue: mainSistrix.totalValue,
+            topPages: mainSistrix.topPages,
           } : null,
           extraMeta: { name: extraName, branche: extraBranche, produkt: extraProdukt },
         }),
@@ -247,16 +273,24 @@ export default function Analyst() {
         let msg = `Fehler ${response.status}`;
         try { const d = await response.json(); msg = d.error || msg; } catch { try { msg = await response.text() || msg; } catch {} }
         setErr(msg);
-        updatePhase("Website wird gecrawlt — Strategieanalyse wird erstellt…", "error");
+        updatePhase(dossierPhase, "error");
       } else {
         let accumulated = "";
-        await parseStream(response, chunk => { accumulated += chunk; setReport(accumulated); }, setErr);
-        updatePhase("Website wird gecrawlt — Strategieanalyse wird erstellt…", "done");
+        await parseStream(response, chunk => { accumulated += chunk; setDossierRaw(accumulated); }, setErr);
+        const parsed = parseDossierJSON(accumulated);
+        if (parsed) {
+          setDossier(parsed);
+          updatePhase(dossierPhase, "done");
+        } else {
+          setErr("Das Dossier konnte nicht gelesen werden (ungültiges JSON). Bitte erneut versuchen.");
+          updatePhase(dossierPhase, "error");
+        }
       }
     } catch (e) {
       setErr("Verbindungsfehler: " + e.message);
-      updatePhase("Website wird gecrawlt — Strategieanalyse wird erstellt…", "error");
+      updatePhase(dossierPhase, "error");
     }
+    setDossierLoading(false);
 
     setLoading(false);
   };
@@ -295,7 +329,7 @@ export default function Analyst() {
       const res = await fetch('/api/save-result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, companyName, report, briefing, sistrixData, competitors: allCompetitors }),
+        body: JSON.stringify({ url, companyName, report, briefing, dossier, sistrixData, competitors: allCompetitors }),
       });
       const d = await res.json();
       if (d.id) {
@@ -312,9 +346,17 @@ export default function Analyst() {
   };
 
   const handleKey = (e) => { if (e.key === "Enter" && !loading) run(); };
-  const companyName = report ? extractCompanyName(report) : null;
+  const companyName = dossier?.firma || (report ? extractCompanyName(report) : null);
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const baseName = slug(companyName || extraName || url);
+
+  const [dossierExportLoading, setDossierExportLoading] = useState(false);
+  const downloadDossier = async () => {
+    if (!dossier) return;
+    setDossierExportLoading(true);
+    try { await exportToDossier({ dossier, sistrixData }); } catch (e) { setErr("Export fehlgeschlagen: " + e.message); }
+    setDossierExportLoading(false);
+  };
 
   return (
     <div>
@@ -324,7 +366,7 @@ export default function Analyst() {
       <div style={s.card}>
         <div style={s.cardTitle}>Analyse konfigurieren</div>
         <p style={{ fontSize: 13, color: MG, marginBottom: 20, lineHeight: 1.6 }}>
-          Das Tool crawlt die Website, identifiziert Wettbewerber automatisch, ruft SISTRIX-Daten ab und erstellt eine vollständige Strategieanalyse mit drei Kapiteln sowie ein persönliches Akquise-Briefing.
+          Das Tool crawlt die Website, identifiziert Wettbewerber automatisch, ruft SISTRIX-Daten ab und erstellt ein Berater- und Mandantendossier: Teil A intern (Cockpit, Befunde, Datenblatt, Gesprächsdrehbuch) und Teil B als abtrennbarer Kundenteil, in einem Word-Dokument.
         </p>
 
         {/* URL */}
@@ -420,53 +462,71 @@ export default function Analyst() {
         </div>
       )}
 
-      {/* ── Dokument 1: Vollständige Strategieanalyse ──────────────────────── */}
-      {report && (
+      {/* ── Mandanten-Dossier ──────────────────────────────────────────────── */}
+      {(dossierLoading || dossier) && (
         <div style={s.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-            <div style={s.cardTitle}>
-              {loading
-                ? <><span style={s.spinner} />Strategieanalyse wird erstellt…</>
-                : <>Strategieanalyse <span style={s.badgeTeal}>Dokument 1</span></>}
-            </div>
+          <div style={s.cardTitle}>
+            {dossierLoading && !dossier
+              ? <><span style={s.spinner} />Berater- und Mandantendossier wird erstellt…</>
+              : <>Berater- und Mandantendossier <span style={s.badgeTeal}>ein Dokument</span></>}
           </div>
 
-          <div style={s.infoBox}>
-            <strong>{companyName || extraName || url}</strong>
-            {extraBranche && <> · {extraBranche}</>}<br />
-            <span style={{ color: MG }}>URL: {url}</span>
-            {allCompetitors.length > 0 && <><br /><span style={{ color: MG }}>Wettbewerber: {allCompetitors.join(", ")}</span></>}
-          </div>
+          {/* Live-Stream solange noch kein geparstes JSON vorliegt */}
+          {dossierLoading && !dossier && (
+            <div style={{ ...s.reportBox, maxHeight: 240 }}>{dossierRaw || "…"}</div>
+          )}
 
-          <div style={s.reportBox}>{report}</div>
-
-          {!loading && (
+          {dossier && (
             <>
+              <div style={s.infoBox}>
+                <strong>{dossier.firma}</strong>
+                {dossier.ansprechpartner && dossier.ansprechpartner !== "(unbekannt)" && <> · {dossier.ansprechpartner}</>}<br />
+                <span style={{ color: MG }}>URL: {url}</span>
+                {allCompetitors.length > 0 && <><br /><span style={{ color: MG }}>Wettbewerber: {allCompetitors.join(", ")}</span></>}
+              </div>
+
+              {/* Vorschau Teil A */}
+              {dossier.teilA?.kernsatz && (
+                <div style={{ background: "#EEF9F7", borderRadius: 6, padding: "12px 16px", fontSize: 13, color: DG, lineHeight: 1.6, marginBottom: 16 }}>
+                  {dossier.teilA.kernsatz}
+                </div>
+              )}
+              {dossier.teilA?.cockpit && (
+                <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 1, background: "#ddd", border: "1px solid #ddd", borderRadius: 6, overflow: "hidden", marginBottom: 16, fontSize: 12.5 }}>
+                  {[["Unternehmen", dossier.teilA.cockpit.unternehmen],
+                    ["Lage", dossier.teilA.cockpit.lage],
+                    ["Score", dossier.teilA.cockpit.score],
+                    ["Nächster Schritt", dossier.teilA.cockpit.naechsterSchritt]].map(([l, c], i) => c && (
+                    <Fragment key={i}>
+                      <div style={{ background: G, color: "white", fontWeight: 700, padding: "8px 10px" }}>{l}</div>
+                      <div style={{ background: "#fafafa", color: DG, padding: "8px 10px", lineHeight: 1.5 }}>{c}</div>
+                    </Fragment>
+                  ))}
+                </div>
+              )}
+              {Array.isArray(dossier.teilA?.befunde) && dossier.teilA.befunde.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, color: MG, textTransform: "uppercase", letterSpacing: "0.3px", fontWeight: 700, marginBottom: 6 }}>
+                    Befunde ({dossier.teilA.befunde.length})
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {dossier.teilA.befunde.map((b, i) => (
+                      <span key={i} style={{ ...s.chip, background: "#f0f8e8", borderColor: `${G}55` }}>{b.titel}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={s.exportRow}>
-                <button style={s.btnDl} onClick={() => dlMd(`${dateStr}_${baseName}_Strategieanalyse.md`, report)}>⬇ .md</button>
-                <button style={{ ...s.btnPdf, opacity: pdfLoading ? 0.7 : 1, cursor: pdfLoading ? "not-allowed" : "pointer" }}
-                  disabled={pdfLoading}
-                  onClick={async () => {
-                    setPdfLoading(true);
-                    await exportToPDF({ chartCardRef, report, url, companyName: companyName || extraName, title: "Strategieanalyse" });
-                    setPdfLoading(false);
-                  }}>
-                  {pdfLoading ? <><span style={s.spinner} />…</> : "📄 PDF"}
-                </button>
-                <button style={{ ...s.btnWord, opacity: wordLoading ? 0.7 : 1, cursor: wordLoading ? "not-allowed" : "pointer" }}
-                  disabled={wordLoading}
-                  onClick={async () => {
-                    setWordLoading(true);
-                    await exportToWord({ report, url, companyName: companyName || extraName, title: "Strategieanalyse" });
-                    setWordLoading(false);
-                  }}>
-                  {wordLoading ? <><span style={s.spinner} />…</> : "📝 Word"}
+                <button style={{ ...s.btnWord, opacity: dossierExportLoading ? 0.7 : 1, cursor: dossierExportLoading ? "not-allowed" : "pointer" }}
+                  disabled={dossierExportLoading} onClick={downloadDossier}>
+                  {dossierExportLoading ? <><span style={s.spinner} />…</> : "📝 Berater- und Mandantendossier .docx"}
                 </button>
                 <button style={{ ...s.btnSave, opacity: saveLoading ? 0.7 : 1, cursor: saveLoading ? "not-allowed" : "pointer" }}
                   disabled={saveLoading} onClick={saveResult}>
                   {saveLoading ? <><span style={s.spinner} />Speichern…</> : "🔗 Ergebnis speichern"}
                 </button>
-                <button style={s.btnSecondary} onClick={() => navigator.clipboard?.writeText(report)}>📋 Kopieren</button>
+                <button style={s.btnDl} onClick={() => dlMd(`${dateStr}_${baseName}_Dossier.json`, JSON.stringify(dossier, null, 2))}>⬇ .json</button>
                 {savedHistory.length > 0 && (
                   <div style={{ position: "relative" }}>
                     <button style={s.btnSecondary} onClick={() => setShowHistory(h => !h)}>🕘 Letzte ({savedHistory.length})</button>
@@ -491,69 +551,7 @@ export default function Analyst() {
                   <a href={savedLink} style={{ fontSize: 12, color: BT, wordBreak: "break-all" }}>{savedLink}</a>
                 </div>
               )}
-              <div style={{ fontSize: 11, color: MG, marginTop: 8 }}>{dateStr}_{baseName}_Strategieanalyse.md</div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── Dokument 2: Akquise-Briefing ───────────────────────────────────── */}
-      {report && !loading && (
-        <div style={{ ...s.card, borderTop: `3px solid ${T}` }}>
-          <div style={s.cardTitleTeal}>
-            Akquise-Briefing
-            <span style={{ ...s.badgeTeal, background: "#e6f7f5", color: T }}>Dokument 2 — für Clemens</span>
-          </div>
-
-          {!briefing && !briefingLoading && (
-            <>
-              <p style={{ fontSize: 13, color: MG, marginBottom: 16, lineHeight: 1.6 }}>
-                Das Akquise-Briefing ist ein vertrauliches Kurzpapier für dich persönlich: priorisierte Defizite des Mandanten, INQA-Anknüpfungspunkte (Unternehmenskultur, Personal &amp; Kompetenz, Digitalisierung), konkrete Beratungsansätze und Gesprächsstrategie.
-              </p>
-              <button style={s.btnTeal} onClick={runBriefing}>
-                ✦ Akquise-Briefing erstellen
-              </button>
-              {briefingErr && <div style={{ ...s.errorMsg, marginTop: 12 }}>{briefingErr}</div>}
-            </>
-          )}
-
-          {briefingLoading && (
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", color: T, fontWeight: 700, fontSize: 13 }}>
-                <span style={{ ...s.spinner, borderTopColor: T }} />
-                Akquise-Briefing wird erstellt…
-              </div>
-              {briefing && <div style={{ ...s.reportBox, borderColor: `${T}44` }}>{briefing}</div>}
-            </div>
-          )}
-
-          {briefing && !briefingLoading && (
-            <>
-              <div style={{ ...s.reportBox, borderColor: `${T}44` }}>{briefing}</div>
-              <div style={s.exportRow}>
-                <button style={s.btnDl} onClick={() => dlMd(`${dateStr}_${baseName}_Akquise-Briefing.md`, briefing)}>⬇ .md</button>
-                <button style={{ ...s.btnPdf, opacity: briefingPdfLoading ? 0.7 : 1, cursor: briefingPdfLoading ? "not-allowed" : "pointer" }}
-                  disabled={briefingPdfLoading}
-                  onClick={async () => {
-                    setBriefingPdfLoading(true);
-                    await exportToPDF({ report: briefing, url, companyName: companyName || extraName, title: "Akquise-Briefing" });
-                    setBriefingPdfLoading(false);
-                  }}>
-                  {briefingPdfLoading ? <><span style={s.spinner} />…</> : "📄 PDF"}
-                </button>
-                <button style={{ ...s.btnWord, opacity: briefingWordLoading ? 0.7 : 1, cursor: briefingWordLoading ? "not-allowed" : "pointer" }}
-                  disabled={briefingWordLoading}
-                  onClick={async () => {
-                    setBriefingWordLoading(true);
-                    await exportToWord({ report: briefing, url, companyName: companyName || extraName, title: "Akquise-Briefing" });
-                    setBriefingWordLoading(false);
-                  }}>
-                  {briefingWordLoading ? <><span style={s.spinner} />…</> : "📝 Word"}
-                </button>
-                <button style={s.btnSecondary} onClick={() => navigator.clipboard?.writeText(briefing)}>📋 Kopieren</button>
-                <button style={{ ...s.btnSecondary, color: T, borderColor: T }} onClick={runBriefing}>↺ Neu erstellen</button>
-              </div>
-              <div style={{ fontSize: 11, color: MG, marginTop: 8 }}>{dateStr}_{baseName}_Akquise-Briefing.md</div>
+              <div style={{ fontSize: 11, color: MG, marginTop: 8 }}>{(() => { const d = new Date(); return `${String(d.getFullYear()).slice(2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; })()}_Berater-und-Mandantendossier_{(dossier.firma||"").replace(/\s+/g,"_")}.docx</div>
             </>
           )}
         </div>

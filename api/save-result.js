@@ -16,8 +16,8 @@ export default async function handler(req, res) {
     try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Ungültiges JSON' }); }
   }
 
-  const { url, companyName, report, briefing, sistrixData, competitors } = body || {};
-  if (!report && !sistrixData) return res.status(400).json({ error: 'Keine Daten' });
+  const { url, companyName, report, briefing, sistrixData, competitors, dossier } = body || {};
+  if (!report && !sistrixData && !dossier) return res.status(400).json({ error: 'Keine Daten' });
 
   const id = randomUUID().replace(/-/g, '').slice(0, 12);
   const storeId = 'store_' + token.split('_')[3];
@@ -28,6 +28,7 @@ export default async function handler(req, res) {
     briefing: briefing || '',
     sistrixData: sistrixData || null,
     competitors: competitors || [],
+    dossier: dossier || null,
     createdAt: new Date().toISOString().slice(0, 10),
   });
 
